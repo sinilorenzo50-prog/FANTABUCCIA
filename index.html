@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FANTABUCCIA - Asta 2026/2027</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #0b1220;
+    color: white;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1100px;
+    margin: auto;
+    padding: 30px 20px;
+}
+
+header {
+    text-align: center;
+    padding: 45px 20px 30px;
+}
+
+.logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 70px;
+    height: 70px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #42c6a5, #ff7468);
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 18px;
+}
+
+h1 {
+    font-size: 48px;
+    letter-spacing: -2px;
+}
+
+.subtitle {
+    margin-top: 10px;
+    color: #9da8bb;
+    font-size: 18px;
+}
+
+.card {
+    background: #131d2e;
+    border: 1px solid #26334a;
+    border-radius: 20px;
+    padding: 28px;
+    max-width: 520px;
+    margin: 20px auto;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25);
+}
+
+.tabs {
+    display: flex;
+    background: #0b1220;
+    border-radius: 12px;
+    padding: 5px;
+    margin-bottom: 25px;
+}
+
+.tabs button {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: #9da8bb;
+    padding: 13px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+.tabs button.active {
+    background: #26334a;
+    color: white;
+}
+
+label {
+    display: block;
+    color: #9da8bb;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+input, select {
+    width: 100%;
+    padding: 15px;
+    border-radius: 11px;
+    border: 1px solid #34435d;
+    background: #0b1220;
+    color: white;
+    font-size: 16px;
+    margin-bottom: 18px;
+    outline: none;
+}
+
+input:focus, select:focus {
+    border-color: #42c6a5;
+}
+
+.primary {
+    width: 100%;
+    padding: 16px;
+    border: 0;
+    border-radius: 11px;
+    background: linear-gradient(90deg, #42c6a5, #35aa92);
+    color: #06110e;
+    font-weight: 800;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.primary:hover {
+    transform: translateY(-1px);
+}
+
+.hidden {
+    display: none;
+}
+
+.info {
+    text-align: center;
+    margin-top: 30px;
+    color: #718097;
+    font-size: 14px;
+}
+
+.dashboard {
+    display: none;
+}
+
+.dashboard h2 {
+    margin-bottom: 20px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.stat {
+    background: #131d2e;
+    border: 1px solid #26334a;
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+}
+
+.stat strong {
+    display: block;
+    font-size: 28px;
+    margin-bottom: 5px;
+}
+
+.stat span {
+    color: #8d99ad;
+    font-size: 13px;
+}
+
+.room-code {
+    text-align: center;
+    background: #17263a;
+    border: 1px solid #42c6a5;
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.room-code small {
+    color: #9da8bb;
+}
+
+.room-code strong {
+    display: block;
+    font-size: 38px;
+    letter-spacing: 5px;
+    margin: 10px 0;
+    color: #42c6a5;
+}
+
+.secondary {
+    padding: 10px 18px;
+    border: 1px solid #34435d;
+    border-radius: 9px;
+    background: transparent;
+    color: white;
+    cursor: pointer;
+}
+
+.players {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.player {
+    background: #131d2e;
+    border: 1px solid #26334a;
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.player strong {
+    display: block;
+}
+
+.player span {
+    color: #8d99ad;
+    font-size: 13px;
+}
+
+@media(max-width:600px) {
+    h1 {
+        font-size: 36px;
+    }
+
+    .stats {
+        grid-template-columns: 1fr;
+    }
+
+    .players {
+        grid-template-columns: 1fr;
+    }
+
+    .card {
+        padding: 20px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div id="home" class="container">
+
+    <header>
+        <div class="logo">FB</div>
+        <h1>FANTABUCCIA</h1>
+        <p class="subtitle">Asta Fantacalcio 2026/2027</p>
+    </header>
+
+    <div class="card">
+
+        <div class="tabs">
+            <button id="adminTab" class="active" onclick="showAdmin()">
+                🔐 Amministratore
+            </button>
+
+            <button id="participantTab" onclick="showParticipant()">
+                👥 Partecipante
+            </button>
+        </div>
+
+        <div id="adminForm">
+
+            <label>Password amministratore</label>
+
+            <input
+                id="adminPassword"
+                type="password"
+                placeholder="Inserisci la password"
+            >
+
+            <button class="primary" onclick="loginAdmin()">
+                Accedi come amministratore →
+            </button>
+
+        </div>
+
+        <div id="participantForm" class="hidden">
+
+            <label>Codice della stanza</label>
+
+            <input
+                id="roomCode"
+                type="text"
+                placeholder="Es. FB26X7"
+                maxlength="10"
+            >
+
+            <button class="primary" onclick="joinRoom()">
+                Entra nell'asta →
+            </button>
+
+        </div>
+
+    </div>
+
+    <p class="info">
+        FANTABUCCIA • Asta 2026/2027
+    </p>
+
+</div>
+
+
+<div id="adminDashboard" class="container dashboard">
+
+    <header>
+        <div class="logo">FB</div>
+        <h1>FANTABUCCIA</h1>
+        <p class="subtitle">Pannello amministratore</p>
+    </header>
+
+    <div class="room-code">
+        <small>CODICE DELLA STANZA</small>
+        <strong id="generatedCode">FB26X7</strong>
+        <button class="secondary" onclick="copyCode()">
+            Copia codice
+        </button>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <strong>6</strong>
+            <span>Partecipanti</span>
+        </div>
+
+        <div class="stat">
+            <strong>500</strong>
+            <span>Crediti iniziali</span>
+        </div>
+
+        <div class="stat">
+            <strong>25</strong>
+            <span>Giocatori per rosa</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Partecipanti</h2>
+
+        <div class="players">
+
+            <div class="player">
+                <strong>Angelo</strong>
+                <span>500 crediti</span>
+            </div>
+
+            <div class="player">
+                <strong>Perino</strong>
+                <span>500 crediti</span>
+            </div>
+
+            <div class="player">
+                <strong>Simone</strong>
+                <span>500 crediti</span>
+            </div>
+
+            <div class="player">
+                <strong>Luca</strong>
+                <span>500 crediti</span>
+            </div>
+
+            <div class="player">
+                <strong>Mattia</strong>
+                <span>500 crediti</span>
+            </div>
+
+            <div class="player">
+                <strong>Nicola</strong>
+                <span>500 crediti</span>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+
+<div id="participantDashboard" class="container dashboard">
+
+    <header>
+        <div class="logo">FB</div>
+        <h1>FANTABUCCIA</h1>
+        <p class="subtitle">Scegli il tuo nome</p>
+    </header>
+
+    <div class="card">
+
+        <label>Il tuo nome</label>
+
+        <select id="participantName">
+            <option value="">Seleziona...</option>
+            <option>Angelo</option>
+            <option>Perino</option>
+            <option>Simone</option>
+            <option>Luca</option>
+            <option>Mattia</option>
+            <option>Nicola</option>
+        </select>
+
+        <button class="primary" onclick="enterAsParticipant()">
+            Entra nell'asta →
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+
+function showAdmin() {
+    document.getElementById("adminForm").classList.remove("hidden");
+    document.getElementById("participantForm").classList.add("hidden");
+
+    document.getElementById("adminTab").classList.add("active");
+    document.getElementById("participantTab").classList.remove("active");
+}
+
+function showParticipant() {
+    document.getElementById("adminForm").classList.add("hidden");
+    document.getElementById("participantForm").classList.remove("hidden");
+
+    document.getElementById("adminTab").classList.remove("active");
+    document.getElementById("participantTab").classList.add("active");
+}
+
+function loginAdmin() {
+
+    const password =
+        document.getElementById("adminPassword").value;
+
+    if (password === "210826") {
+
+        document.getElementById("home").style.display = "none";
+        document.getElementById("adminDashboard").style.display = "block";
+
+    } else {
+
+        alert("Password amministratore non corretta.");
+
+    }
+}
+
+function joinRoom() {
+
+    const code =
+        document.getElementById("roomCode").value
+        .trim()
+        .toUpperCase();
+
+    if (!code) {
+
+        alert("Inserisci il codice della stanza.");
+
+        return;
+    }
+
+    document.getElementById("home").style.display = "none";
+    document.getElementById("participantDashboard").style.display = "block";
+}
+
+function enterAsParticipant() {
+
+    const name =
+        document.getElementById("participantName").value;
+
+    if (!name) {
+
+        alert("Seleziona il tuo nome.");
+
+        return;
+    }
+
+    alert("Benvenuto in FANTABUCCIA, " + name + "!");
+}
+
+function copyCode() {
+
+    const code =
+        document.getElementById("generatedCode").innerText;
+
+    navigator.clipboard.writeText(code);
+
+    alert("Codice copiato: " + code);
+}
+
+</script>
+
+</body>
+</html>
