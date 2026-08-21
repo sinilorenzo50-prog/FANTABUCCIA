@@ -195,7 +195,7 @@ async function joinRoom(){
  await ensureRoom(); document.getElementById("home").classList.add("hidden");
  document.getElementById("participantDashboard").classList.remove("hidden");
  document.getElementById("participantDashboard").dataset.choose="1";
- listenRoom(); toast("Stanza collegata","Seleziona il tuo nome.");
+ listenRoom(); toast("Stanza collegata","Seleziona il tuo nome.");selectParticipantForEntry();
 }
 window.loginAdmin=loginAdmin;window.joinRoom=joinRoom;
 
