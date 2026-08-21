@@ -624,6 +624,22 @@ function firstBidderFor(player,price){
   return null;
 }
 
+// Il chiamante ruota sempre nell'ordine stabilito: dopo Angelo tocca a Perino,
+// poi Simone, Luca, Mattia, Nicola e infine si torna ad Angelo.
+// Usiamo il nome del chiamante corrente come riferimento, così l'avanzamento
+// resta corretto anche se l'ordine viene modificato durante la sessione.
+function nextCallerIndex(){
+  const order=Array.isArray(state?.order)&&state.order.length?state.order:NAMES;
+  const current=order[state.orderIndex%order.length];
+  const idx=order.indexOf(current);
+  return (idx>=0?idx:0)+1>=order.length ? 0 : (idx>=0?idx:0)+1;
+}
+
+function nextCallerName(){
+  const order=Array.isArray(state?.order)&&state.order.length?state.order:NAMES;
+  return order[nextCallerIndex()]||order[0]||null;
+}
+
 function availablePlayers(){
   return state.players.filter(p=>!p.sold);
 }
@@ -920,9 +936,11 @@ async function copyRoom(){
 async function skipCaller(){
   if(state.phase!=="calling")return;
   pushUndo();
-  const nextIndex=(state.orderIndex+1)%state.order.length;
+  const current=state.order[state.orderIndex%state.order.length];
+  const nextIndex=nextCallerIndex();
+  const next=state.order[nextIndex];
   await save({orderIndex:nextIndex},"Chiamante saltato",false);
-  await addEvent(`${state.order[state.orderIndex]} saltato; prossimo chiamante ${state.order[nextIndex]}`,"yellow");
+  await addEvent(`${current} saltato; prossimo chiamante ${next}`,"yellow");
 }
 
 function pauseAuction(){
@@ -1039,6 +1057,10 @@ async function confirmStart(id){
   const caller=state.order[state.orderIndex%state.order.length];
   if(!caller)return toast("Chiamante non trovato","Controlla l'ordine delle chiamate.","red");
 
+  // IMPORTANTE: il chiamante corrente resta responsabile di questa chiamata.
+  // Quando l'asta viene assegnata, autoAssignCurrentWinner()/assign() fanno
+  // avanzare orderIndex di una sola posizione, quindi la prossima chiamata
+  // spetta sempre al partecipante successivo nell'ordine.
   // La chiamata del partecipante vale già come prima puntata.
   if(!canOffer(caller,p.role,price)){
     const fallback=firstAvailableBidder(p,price);
@@ -1177,7 +1199,7 @@ async function autoAssignCurrentWinner(){
   participants[winner].roster.push({...state.currentPlayer,price,owner:winner,purchasedAt:Date.now()});
   const players=state.players.map(x=>x.id===state.currentPlayer.id?{...x,sold:true,owner:winner,finalPrice:price}:x);
   const playerName=state.currentPlayer.name;
-  await save({participants,players,phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,activeBidders:[],retired:[],orderIndex:(state.orderIndex+1)%state.order.length},"Assegnazione automatica",true);
+  await save({participants,players,phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,activeBidders:[],retired:[],orderIndex:nextCallerIndex()},"Assegnazione automatica",true);
   await addEvent(`${playerName} assegnato automaticamente a ${winner} per ${price} crediti`,"green");
   toast("Giocatore assegnato",`${playerName} va a ${winner} per ${price} crediti.` ,"green");
   return true;
@@ -1196,7 +1218,7 @@ async function assign(){
   const playerName=state.currentPlayer.name;
   await save({
     participants,players,phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,
-    activeBidders:[],retired:[],orderIndex:(state.orderIndex+1)%state.order.length
+    activeBidders:[],retired:[],orderIndex:nextCallerIndex()
   },"Assegnazione giocatore",true);
   await addEvent(`${playerName} assegnato a ${winner} per ${price} crediti`,"green");
 }
