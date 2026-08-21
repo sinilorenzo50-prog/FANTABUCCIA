@@ -845,7 +845,7 @@ function startAuctionModal(id){
   <div class="banner" style="text-align:center"><div class="big">${esc(p.name)}</div><div class="small">${esc(p.team||"")} • ${roleNormalize(p.role)}</div></div>
   <div class="two"><div><label>Prezzo di partenza</label><input id="startPrice" type="number" min="1" value="${Number(p.price)||1}"></div><div><label>Modalità turno</label><select id="startMode"><option value="caller">Parte dal chiamante</option><option value="first">Primo offerente disponibile</option></select></div></div>
   <div class="notice">L'app controllerà automaticamente crediti e posti disponibili nella rosa.</div>
-  <div class="toolbar"><button class="ghost" data-action="players-modal">Annulla</button><button class="primary" data-confirm-start="${esc(id)}">🔴 AVVIA ASTA</button></div>`);
+  <div class="toolbar"><button class="ghost" data-action="players-modal">Annulla</button><button type="button" class="primary" data-confirm-start="${esc(id)}" style="cursor:pointer;pointer-events:auto;position:relative;z-index:5">🔴 AVVIA ASTA</button></div>`);
 }
 async function confirmStart(id){
   if(state.paused)return toast("Asta in pausa","Riprendi prima di avviare.","yellow");
@@ -1101,8 +1101,13 @@ function logout(){
 function bind(){
   if(listenersReady)return;listenersReady=true;
   document.addEventListener("click",async e=>{
-    const actionEl=e.target.closest("[data-action],[data-name-choice],[data-bid],[data-bidder],[data-start-player],[data-edit-player],[data-remove-player],[data-save-player]");
+    const actionEl=e.target.closest("[data-action],[data-name-choice],[data-bid],[data-bidder],[data-start-player],[data-confirm-start],[data-edit-player],[data-remove-player],[data-save-player]");
     const action=actionEl?.dataset.action;
+      const confirmStartId=actionEl?.dataset.confirmStart;
+      if(confirmStartId){
+        await confirmStart(confirmStartId);
+        return;
+      }
 
     try{
       if(action==="show-admin")return showAdminForm();
