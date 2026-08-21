@@ -177,7 +177,7 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
 <div id="v8StartAuctionBar">
   <div id="v8EnteredStatus">👥 Partecipanti entrati: <b id="v8EnteredCount">0/0</b></div>
   <button id="v8StartAuctionButton" type="button" disabled>🔥 AVVIA ASTA</button>
-  <div class="v8hint">Quando il contatore arriva a 6/6, il pulsante diventa attivo.</div>
+  <div class="v8hint">Il contatore si aggiorna in tempo reale. Puoi avviare l'asta anche prima che siano entrati tutti.</div>
 </div>
 
 
@@ -499,6 +499,11 @@ function listenRoom(){
     const previous=state;
     state=normalize(snap.data());
     render();
+    // Notifica immediatamente anche la barra "partecipanti entrati" e gli altri
+    // elementi UI che vivono nel layer non-module. Questo evita di aspettare
+    // un render locale e rende il contatore una conseguenza diretta dello
+    // snapshot Firebase ricevuto dalla stanza.
+    if(typeof window.__FB_ON_ROOM_UPDATE === "function") window.__FB_ON_ROOM_UPDATE(state);
 
     // EVENTI ANIMAZIONE SINCRONIZZATI: Firebase è la fonte unica.
     // Non facciamo affidamento sul fatto che la funzione grafica sia già
@@ -1658,6 +1663,10 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
   function allEntered(){ const ns=namesNow(); return ns.length>0 && enteredNow()===ns.length; }
   function api(){ return window.__FB_API||{}; }
 
+  // Il contatore viene aggiornato sia dal listener Firebase sia dal piccolo
+  // polling di sicurezza. In questo modo l'admin vede subito 0/6, 1/6, ... 6/6.
+  window.__FB_ON_ROOM_UPDATE=function(){ refreshStartBar(); };
+
   function refreshStartBar(){
     const bar=document.getElementById("v8StartAuctionBar"), count=document.getElementById("v8EnteredCount"), btn=document.getElementById("v8StartAuctionButton");
     if(!bar||!count||!btn)return;
@@ -1676,17 +1685,20 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
       btn.style.color="#fff";
       return;
     }
-    const ready=allEntered();
+    // L'asta può essere avviata anche se non sono ancora entrati tutti.
+    // Il numero degli ingressi resta comunque visibile in tempo reale.
+    const ready=entered>0;
     btn.disabled=started ? false : !ready;
-    btn.textContent=started ? "🏁 CONCLUDI ASTA" : (ready ? "🔥 AVVIA ASTA" : "🔒 IN ATTESA DEI PARTECIPANTI");
+    btn.textContent=started ? "🏁 CONCLUDI ASTA" : (ready ? `🔥 AVVIA ASTA (${entered}/${total})` : "🔒 IN ATTESA DEL PRIMO PARTECIPANTE");
     btn.style.background=started ? "linear-gradient(135deg,#ffb347,#ff5d6c)" : "linear-gradient(135deg,#ffd23f,#ff7a00)";
     btn.style.color="#111";
   }
 
   async function realStartAuction(){
     const st=stateNow();
-    if(!st || !isAdminNow() || !allEntered()){
-      if(typeof window.toast==="function") window.toast("Non ancora pronto","Devono entrare tutti i partecipanti.","yellow");
+    const entered=enteredNow();
+    if(!st || !isAdminNow() || entered<1){
+      if(typeof window.toast==="function") window.toast("Nessun partecipante","Deve essere entrato almeno un partecipante prima di iniziare.","yellow");
       return;
     }
     if(st.auctionStartedAt || st.phase==="finished"){
