@@ -1068,7 +1068,7 @@ function logout(){
 function bind(){
   if(listenersReady)return;listenersReady=true;
   document.addEventListener("click",async e=>{
-    const actionEl=e.target.closest("[data-action],[data-bid],[data-bidder],[data-start-player],[data-edit-player],[data-remove-player],[data-save-player]");
+    const actionEl=e.target.closest("[data-action],[data-name-choice],[data-bid],[data-bidder],[data-start-player],[data-edit-player],[data-remove-player],[data-save-player]");
     const action=actionEl?.dataset.action;
 
     try{
@@ -1108,8 +1108,10 @@ function bind(){
         const input=$("chooseName");
         if(input) input.value=nameChoice;
         document.querySelectorAll("[data-name-choice]").forEach(b=>{
-          b.style.borderColor = b.dataset.nameChoice===nameChoice ? "var(--accent)" : "var(--line)";
-          b.style.background = b.dataset.nameChoice===nameChoice ? "#102b3a" : "#0b1728";
+          const selected=b.dataset.nameChoice===nameChoice;
+          b.style.borderColor = selected ? "var(--accent)" : "var(--line)";
+          b.style.background = selected ? "#102b3a" : "#0b1728";
+          b.style.boxShadow = selected ? "0 0 0 2px rgba(66,220,190,.22)" : "none";
         });
         return;
       }
