@@ -354,11 +354,11 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot,
   runTransaction
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyA1Szoqwn1Id54zjuhkl9ipyUSP4ZoTtPo",
@@ -948,8 +948,28 @@ function settings(){
     </div>
   </div>
   <div class="notice">⚠️ Modificare i crediti iniziali non cambia automaticamente i crediti già spesi dai partecipanti. È pensato per impostare la stanza prima dell'asta.</div>
+  <div class="section" style="margin-top:14px">
+    <div class="section-title">👥 Gestione ingressi</div>
+    <div class="small" style="margin-bottom:10px">Azzera solo lo stato di ingresso dei partecipanti. Non cancella crediti, rose o listone.</div>
+    <button class="danger" data-action="reset-participants">↺ Reset partecipanti (0/6)</button>
+  </div>
   <div class="toolbar"><button class="ghost" data-action="close-modal">Annulla</button><button class="primary" data-action="save-settings">Salva impostazioni</button></div>`);
 }
+async function resetParticipants(){
+  if(!state || !isAdmin)return;
+  const ok=confirm("Vuoi far uscire tutti i partecipanti dalla stanza?\n\nVerrà azzerato solo lo stato di ingresso (joined). Crediti, rose e listone resteranno invariati.");
+  if(!ok)return;
+  const participants={};
+  for(const n of NAMES){
+    const p=state.participants?.[n] || {name:n,credits:state.startingCredits||START_CREDITS,roster:[],active:true};
+    participants[n]={...p,joined:false,joinedAt:null};
+  }
+  await save({participants},"Reset ingressi partecipanti",true);
+  await addEvent("Tutti i partecipanti sono stati fatti uscire dalla stanza","yellow");
+  closeModal();
+  toast("Partecipanti resettati","Ora la stanza è pronta per un nuovo ingresso.","green");
+}
+
 async function saveSettings(){
   const credits=Math.max(1,Number($("setCredits").value)||500);
   const roster=Math.max(1,Number($("setRoster").value)||25);
@@ -1081,6 +1101,7 @@ function bind(){
       if(action==="skip-caller")return skipCaller();
       if(action==="settings")return settings();
       if(action==="save-settings")return saveSettings();
+      if(action==="reset-participants")return resetParticipants();
       if(action==="ranking-modal")return rankingModal();
       if(action==="export-state")return exportState();
       if(action==="import-state")return importState();
