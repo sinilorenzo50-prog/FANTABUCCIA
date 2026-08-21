@@ -263,7 +263,7 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
         </div>
         <div class="notice">
           <b>💡 Suggerimento:</b> il giocatore che sta chiamando non deve necessariamente essere il primo offerente.
-          Il turno dell'asta parte dal chiamante se può partecipare, altrimenti passa automaticamente al primo disponibile.
+          La chiamata del partecipante vale automaticamente come prima puntata; poi il turno passa al prossimo disponibile.
         </div>
       </div>
 
@@ -281,6 +281,10 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
         <div id="currentPrice" class="price">0</div>
         <div>Ultimo offerente: <b id="currentBidder">—</b></div>
         <div class="next">👉 TOCCA A <strong id="nextBidder">—</strong></div>
+        <div id="openingControls" class="toolbar center hidden" style="margin-bottom:10px">
+          <button type="button" class="success" data-action="confirm-opening">✅ Conferma puntata <span id="openingBidName">—</span> a <span id="openingBidPrice">1</span></button>
+          <button type="button" class="warning" data-action="pass-opening">⏭ Passa al prossimo partecipante</button>
+        </div>
         <div class="controls">
           <button class="primary bid-btn" data-bid="1">+1</button>
           <button class="primary bid-btn" data-bid="2">+2</button>
@@ -685,17 +689,26 @@ function renderAdmin(){
     $("currentPrice").textContent=state.currentPrice;
     $("currentBidder").textContent=state.currentBidder||"—";
     const next=nextBidder();
+    const openingPending=state.currentBidder===null;
     $("nextBidder").textContent=next||"Nessuno";
     $("retireName").textContent=next||"—";
+    const openingControls=$("openingControls");
+    if(openingControls){
+      openingControls.classList.toggle("hidden",!openingPending);
+      $("openingBidName").textContent=next||"—";
+      $("openingBidPrice").textContent=state.currentPrice;
+    }
     $("auctionNotice").innerHTML=state.paused
       ? "<b>⏸ ASTA IN PAUSA</b> — nessuna offerta può essere effettuata."
-      : next
-        ? `<b>Turno:</b> ${esc(next)} • Massimo spendibile: ${state.participants[next].credits} cr`
-        : "<b>⚠️ Nessun altro offerente valido.</b> Puoi assegnare al miglior offerente.";
-    document.querySelectorAll(".bid-btn").forEach(b=>{ b.disabled=!firebaseConnected || state.paused; });
+      : openingPending
+        ? `<b>Puntata iniziale:</b> ${esc(next||"nessuno")} a ${state.currentPrice} crediti. Puoi anche passare al prossimo partecipante.`
+        : next
+          ? `<b>Turno:</b> ${esc(next)} • Massimo spendibile: ${state.participants[next].credits} cr`
+          : "<b>⚠️ Nessun altro offerente valido.</b> Il miglior offerente verrà assegnato automaticamente.";
+    document.querySelectorAll(".bid-btn").forEach(b=>{ b.disabled=!firebaseConnected || state.paused || openingPending; });
     const cb=$("customBid"); const cbb=document.querySelector('[data-action="custom-bid"]');
-    if(cb) cb.disabled=!firebaseConnected || state.paused;
-    if(cbb) cbb.disabled=!firebaseConnected || state.paused;
+    if(cb) cb.disabled=!firebaseConnected || state.paused || openingPending;
+    if(cbb) cbb.disabled=!firebaseConnected || state.paused || openingPending;
   }
 }
 
@@ -733,7 +746,7 @@ function renderParticipant(){
     $("publicMeta").textContent=`${state.currentPlayer.team||"Squadra"} • ${roleNormalize(state.currentPlayer.role)}`;
     $("publicPrice").textContent=state.currentPrice;
     $("publicBidder").textContent=state.currentBidder||"—";
-    const myTurn=nextBidder()===me&&!state.paused;
+    const myTurn=state.currentBidder!==null && nextBidder()===me&&!state.paused;
     $("myTurnPanel").classList.toggle("hidden",!myTurn);
     $("notMyTurn").classList.toggle("hidden",myTurn);
     $("myTurnInfo").textContent=`Offerta attuale ${state.currentPrice} cr • puoi arrivare fino a ${maxSpend(p)} cr.`;
@@ -1007,8 +1020,10 @@ function startAuctionModal(id){
   const p=state.players.find(x=>x.id===id);if(!p||p.sold)return;
   showModal(`<div class="modal-head"><h2>🔴 Avvia asta</h2><button class="modal-close" data-action="players-modal">✕</button></div>
   <div class="banner" style="text-align:center"><div class="big">${esc(p.name)}</div><div class="small">${esc(p.team||"")} • ${roleNormalize(p.role)}</div></div>
-  <div class="two"><div><label>Prezzo di partenza</label><input id="startPrice" type="number" min="1" value="1"></div><div><label>Modalità turno</label><select id="startMode"><option value="caller">Parte dal chiamante</option><option value="first">Primo offerente disponibile</option></select></div></div>
-  <div class="notice">L'app controllerà automaticamente crediti e posti disponibili nella rosa.</div>
+  <div class="two"><div><label>Prezzo di partenza</label><input id="startPrice" type="number" min="1" value="1"></div><div>
+     <label>Prima puntata</label><div class="input-like">👑 Il chiamante apre automaticamente</div>
+   </div></div>
+  <div class="notice">La chiamata del partecipante vale automaticamente come sua prima puntata. Esempio: Angelo chiama Svilar a 1 → Svilar parte a 1 con Angelo in testa e il turno passa subito al prossimo partecipante.</div>
   <div class="toolbar"><button class="ghost" data-action="players-modal">Annulla</button><button type="button" class="primary" data-confirm-start="${esc(id)}" style="cursor:pointer;pointer-events:auto;position:relative;z-index:5">🔴 AVVIA ASTA</button></div>`);
 }
 async function confirmStart(id){
@@ -1016,26 +1031,84 @@ async function confirmStart(id){
   if(!state.auctionStartedAt)return toast("Asta non avviata","Prima premi 🔥 AVVIA ASTA.","yellow");
   if(state.paused)return toast("Asta in pausa","Riprendi prima di avviare.","yellow");
   if(state.phase==="auction")return toast("Asta già attiva","Concludi prima l'asta corrente.","yellow");
-  const p=state.players.find(x=>x.id===id);if(!p)return;
-  const price=Math.max(1,Number($("startPrice").value)||1);
-  const mode=$("startMode").value;
-  const first=mode==="first"?firstAvailableBidder(p,price):firstBidderFor(p,price);
-  if(!first)return toast("Nessun offerente","Nessun partecipante può acquistare questo giocatore a quel prezzo.","red");
-  await save({
-    phase:"auction",currentPlayer:p,currentPrice:price,currentBidder:null,
-    activeBidders:state.order.filter(n=>canOffer(n,p.role,price)),retired:[]
-  },"Asta avviata",true);
-  await addEvent(`${p.name} all'asta • partenza ${price} crediti • primo turno ${first}`,"green");
+
+  const p=state.players.find(x=>x.id===id);
+  if(!p)return;
+
+  const price=Math.max(1,Number($("startPrice")?.value)||1);
+  const caller=state.order[state.orderIndex%state.order.length];
+  if(!caller)return toast("Chiamante non trovato","Controlla l'ordine delle chiamate.","red");
+
+  // La chiamata del partecipante vale già come prima puntata.
+  if(!canOffer(caller,p.role,price)){
+    const fallback=firstAvailableBidder(p,price);
+    if(!fallback)return toast("Nessun offerente","Nessun partecipante può acquistare questo giocatore a quel prezzo.","red");
+
+    await save({
+      phase:"auction",
+      currentPlayer:p,
+      currentPrice:price,
+      currentBidder:fallback,
+      activeBidders:state.order.filter(n=>canOffer(n,p.role,price)),
+      retired:[]
+    },"Asta avviata • primo offerente disponibile",true);
+    await addEvent(`${p.name} all'asta • partenza ${price} crediti • ${fallback} apre automaticamente`,"green");
+  }else{
+    await save({
+      phase:"auction",
+      currentPlayer:p,
+      currentPrice:price,
+      currentBidder:caller,
+      activeBidders:state.order.filter(n=>canOffer(n,p.role,price)),
+      retired:[]
+    },"Asta avviata • chiamata diventata prima puntata",true);
+    await addEvent(`${p.name} all'asta • ${caller} apre a ${price} crediti • turno al prossimo partecipante`,"green");
+  }
+
   closeModal();
+
+  // Se il chiamante è l'unico offerente valido, assegna subito.
+  if(!nextBidder() && state.currentBidder){
+    await autoAssignCurrentWinner();
+  }
 }
 function firstAvailableBidder(p,price){
   for(const n of state.order)if(canOffer(n,p.role,price))return n;
   return null;
 }
 
-async function placeBid(who,amount){
+async function confirmOpening(){
+  if(!isAdmin)return;
+  if(state.phase!=="auction"||state.paused||!state.currentPlayer)return;
+  if(state.currentBidder!==null)return toast("Puntata già confermata","L'asta è già passata al turno successivo.","yellow");
+  const who=nextBidder();
+  if(!who)return toast("Nessun offerente","Nessun partecipante può acquistare questo giocatore.","red");
+  if(!firebaseConnected||!navigator.onLine)return toast("Connessione assente","L'admin deve essere online per confermare la puntata.","red");
+  if(!canOffer(who,state.currentPlayer.role,state.currentPrice))return toast("Offerta non consentita",`${who} non può confermare ${state.currentPrice} crediti.`,"red");
+  await save({currentBidder:who},"Puntata iniziale confermata",true);
+  await addEvent(`${who} conferma la puntata iniziale a ${state.currentPrice} crediti`,"green");
+}
+
+async function passOpening(){
+  if(!isAdmin)return;
+  if(state.phase!=="auction"||state.paused||!state.currentPlayer||state.currentBidder!==null)return;
+  const who=nextBidder();
+  if(!who)return toast("Nessun offerente","Non ci sono altri partecipanti disponibili.","yellow");
+  const retired=[...new Set([...(state.retired||[]),who])];
+  const activeBidders=(state.activeBidders||[]).filter(x=>x!==who);
+  await save({retired,activeBidders},"Passaggio del turno iniziale",true);
+  await addEvent(`${who} passa la puntata iniziale da ${state.currentPrice} crediti`,"yellow");
+  const next=nextBidder();
+  if(!next){
+    // Nessuno ha fatto un'offerta: l'asta non può essere assegnata a un offerente.
+    toast("Nessun offerente",`Nessuno ha confermato la puntata iniziale di ${state.currentPrice} crediti.`,"yellow");
+  }
+}
+
+async function placeBid(who,amount,adminOverride=false){
   if(!navigator.onLine || !firebaseConnected) return toast("Connessione assente","Attendi la riconnessione prima di rilanciare.","red");
   if(state.phase!=="auction"||state.paused||!state.currentPlayer)return;
+  if(state.currentBidder===null)return toast("Conferma prima la puntata iniziale","L'offerta di apertura deve essere confermata dall'admin prima dei rilanci.","yellow");
   const expected=nextBidder();
   if(who!==expected)return toast("Non è il tuo turno",`Tocca a ${expected||"nessuno"}.`,"yellow");
   const price=Number(amount);
@@ -1062,6 +1135,8 @@ async function retireSelf(){
   if(state.phase!=="auction"||state.paused||!state.currentPlayer)
     return toast("Asta non disponibile","Non puoi ritirarti in questo momento.","yellow");
   const expected=nextBidder();
+  if(state.currentBidder===null)
+    return toast("Attendi la conferma iniziale","L'admin deve prima confermare la puntata di apertura.","yellow");
   if(expected!==me)
     return toast("Non è il tuo turno",`Tocca a ${expected||"nessuno"}.`,"yellow");
   if(!confirm(`Confermi di volerti ritirare dall'asta di ${state.currentPlayer.name}?`))return;
@@ -1070,6 +1145,10 @@ async function retireSelf(){
     activeBidders:(state.activeBidders||[]).filter(x=>x!==me)
   },"Ritiro partecipante",true);
   await addEvent(`${me} si è ritirato da ${state.currentPlayer.name}`,"yellow");
+  const winner=state.currentBidder;
+  // Se nessun altro può rilanciare, l'ultimo offerente vince automaticamente.
+  const others=nextBidder();
+  if(!others && winner) return autoAssignCurrentWinner();
   toast("Ti sei ritirato",`Il turno passa automaticamente al prossimo partecipante.`,"yellow");
 }
 
@@ -1082,11 +1161,28 @@ async function customBid(){
 }
 
 async function retire(){
+  if(state.currentBidder===null)return toast("Puntata iniziale non confermata","Conferma la puntata o passa il primo partecipante.","yellow");
   const n=nextBidder();if(!n)return toast("Nessuno da ritirare","Non ci sono altri offerenti.","yellow");
   if(!confirm(`Confermi il ritiro di ${n}?`))return;
   await save({retired:[...new Set([...state.retired,n])],activeBidders:state.activeBidders.filter(x=>x!==n)},"Ritiro offerente",true);
   await addEvent(`${n} si è ritirato da ${state.currentPlayer.name}`,"yellow");
+  if(!nextBidder() && state.currentBidder) await autoAssignCurrentWinner();
 }
+async function autoAssignCurrentWinner(){
+  if(state.phase!=="auction"||!state.currentPlayer||!state.currentBidder)return false;
+  const winner=state.currentBidder,price=state.currentPrice,p=state.participants[winner];
+  if(!canOffer(winner,state.currentPlayer.role,price))return false;
+  const participants=JSON.parse(JSON.stringify(state.participants));
+  participants[winner].credits-=price;
+  participants[winner].roster.push({...state.currentPlayer,price,owner:winner,purchasedAt:Date.now()});
+  const players=state.players.map(x=>x.id===state.currentPlayer.id?{...x,sold:true,owner:winner,finalPrice:price}:x);
+  const playerName=state.currentPlayer.name;
+  await save({participants,players,phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,activeBidders:[],retired:[],orderIndex:(state.orderIndex+1)%state.order.length},"Assegnazione automatica",true);
+  await addEvent(`${playerName} assegnato automaticamente a ${winner} per ${price} crediti`,"green");
+  toast("Giocatore assegnato",`${playerName} va a ${winner} per ${price} crediti.` ,"green");
+  return true;
+}
+
 async function assign(){
   if(state.phase!=="auction")return toast("Nessuna asta attiva","Non c’è un giocatore attualmente all’asta.","yellow");
   if(!state.currentPlayer||!state.currentBidder)return toast("Impossibile assegnare","Serve un offerente.","red");
@@ -1340,6 +1436,8 @@ function bind(){
       if(action==="import-state")return importState();
       if(action==="restore-backup")return restoreBackup();
       if(action==="custom-bid")return customBid();
+      if(action==="confirm-opening")return confirmOpening();
+      if(action==="pass-opening")return passOpening();
       if(action==="public-custom-bid")return publicCustomBid();
       if(action==="public-retire")return retireSelf();
       if(action==="retire")return retire();
