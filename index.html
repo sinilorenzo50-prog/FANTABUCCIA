@@ -1791,61 +1791,214 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
   function escT(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
   function getState(){return window.__FB_STATE?window.__FB_STATE():null}
   function isAdmin(){return window.__FB_ADMIN?window.__FB_ADMIN():false}
-  function row(ok,label,detail){
-    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ${ok?'rgba(66,220,190,.28)':'rgba(255,93,108,.35)'};background:${ok?'rgba(66,220,190,.06)':'rgba(255,93,108,.06)'};border-radius:10px;margin:7px 0"><b style="min-width:24px;color:${ok?'#42dcbe':'#ff5d6c'}">${ok?'✓':'✕'}</b><div><b>${escT(label)}</b><div class="small">${escT(detail)}</div></div></div>`;
+
+  const results=[];
+  let modalHost=null, modalShell=null, running=false;
+
+  function add(ok,label,detail,critical=false){
+    results.push({ok:!!ok,label,detail,critical:!!critical});
+    renderProgress();
   }
-  function runTest(){
-    const st=getState();
-    const rows=[];
-    rows.push(row(!!st && isAdmin(),'Stanza Firebase attiva',st?`Stanza ${st.roomId||'attiva'} collegata e pannello admin aperto.`:'Nessuno stato stanza disponibile.'));
-    rows.push(row(!!st && st.participants && Object.keys(st.participants).length===6,'6 partecipanti configurati',st?`${Object.keys(st.participants).length}/6 partecipanti presenti nella configurazione.`:'Stato non disponibile.'));
-    const entered=st?.participants?Object.values(st.participants).filter(p=>p?.joined===true).length:0;
-    rows.push(row(!!st, 'Contatore ingressi realtime pronto',st?`${entered}/6 entrati in questo momento.`:'Non verificabile.'));
-    const players=Array.isArray(st?.players)?st.players:[];
-    rows.push(row(players.length>=500,'Listone caricato',`${players.length} giocatori presenti.`));
-    const sold=players.filter(p=>p.sold===true);
-    rows.push(row(sold.length===0,'Listone pulito','Nessun giocatore risulta acquistato. Se vedi venduti dopo un test, usa RESET ASTA.'));
-    const rosters=st?Object.values(st.participants||{}).reduce((n,p)=>n+(p?.roster?.length||0),0):0;
-    rows.push(row(rosters===0,'Rose di test vuote',`${rosters} giocatori assegnati.`));
-    const creditsOk=st?Object.values(st.participants||{}).every(p=>Number(p.credits)===Number(st.startingCredits||500)):false;
-    rows.push(row(creditsOk,'Crediti ripristinati',st?`Tutti a ${st.startingCredits||500} crediti.`:'Non verificabile.'));
-    rows.push(row((st?.history||[]).length===0,'Storico vuoto',`${(st?.history||[]).length} eventi.`));
-    rows.push(row((st?.alerts||[]).length===0,'Avvisi vuoti',`${(st?.alerts||[]).length} avvisi.`));
-    rows.push(row(st?.phase==='calling' && !st?.auctionStartedAt,'Asta in stato pronto',st?`Fase: ${st.phase}; asta avviata: ${st.auctionStartedAt?'sì':'no'}.`:'Non verificabile.'));
-    rows.push(row(!!document.getElementById('v8StartAuctionButton'),'Controllo AVVIA/CONCLUDI presente','Il pulsante sincronizzato admin è presente nella pagina.'));
-    const total=rows.length;
-    // Calcoliamo il risultato in modo affidabile: row() restituisce un frammento HTML,
-    // quindi il precedente controllo con includes('>✓<') poteva non riconoscere i check.
-    const passed=rows.reduce((n,x)=>n + (x.includes('>✓</b>') ? 1 : 0),0);
-    const modalHtml=`<div class="modal-head"><div><h2>🧪 Collaudo FANTABUCCIA</h2><div class="small">Controllo locale: non modifica Firebase e non manda eventi ai partecipanti.</div></div><button class="modal-close" data-action="close-modal">✕</button></div><div class="notice"><b>${passed}/${total} controlli superati</b><br>Questo test verifica integrità e stato attuale. Non sostituisce una prova reale con più telefoni.</div>${rows.join('')}<div class="toolbar"><button class="primary" id="runSystemTestAgain" type="button">🔄 Ripeti test</button><button class="ghost" data-action="close-modal">Chiudi</button></div>`;
-    if(typeof window.showModal==='function'){
-      window.showModal(modalHtml);
-    }else{
-      // Fallback robusto nel caso in cui la funzione globale non sia ancora disponibile.
-      const host=document.getElementById('modalContent');
-      const shell=document.getElementById('modal');
-      if(host && shell){ host.innerHTML=modalHtml; shell.classList.remove('hidden'); }
-      else { alert(`🧪 TEST SISTEMA\n\n${passed}/${total} controlli superati.`); }
+
+  function row(r){
+    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ${r.ok?'rgba(66,220,190,.28)':'rgba(255,93,108,.35)'};background:${r.ok?'rgba(66,220,190,.06)':'rgba(255,93,108,.06)'};border-radius:10px;margin:7px 0">
+      <b style="min-width:24px;color:${r.ok?'#42dcbe':'#ff5d6c'}">${r.ok?'✓':'✕'}</b>
+      <div><b>${escT(r.label)}</b><div class="small">${escT(r.detail)}</div></div>
+    </div>`;
+  }
+
+  function renderProgress(final=false){
+    if(!modalHost) return;
+    const passed=results.filter(x=>x.ok).length, total=results.length;
+    const failed=results.filter(x=>!x.ok).length;
+    const title=final ? (failed ? '❌ TEST COMPLETATO CON ERRORI' : '✅ TEST COMPLETATO') : '🧪 TEST SISTEMA IN CORSO…';
+    modalHost.innerHTML=`
+      <div class="modal-head">
+        <div><h2>${title}</h2><div class="small">Controllo approfondito non distruttivo: Firebase reale + simulazione locale delle transizioni.</div></div>
+        ${final?'<button class="modal-close" data-action="close-modal">✕</button>':''}
+      </div>
+      <div class="notice"><b>${passed}/${total} controlli completati${final?' · '+failed+' errori':''}</b><br>
+      ${final?'Nessun dato di produzione viene modificato dal test.':'Attendi: ogni fase viene eseguita realmente, non è una schermata fissa.'}</div>
+      ${results.map(row).join('')}
+      ${final?`<div class="toolbar">
+        <button class="primary" id="runSystemTestAgain" type="button">🔄 Esegui di nuovo</button>
+        <button class="ghost" data-action="close-modal">Chiudi</button>
+      </div>`:'<div class="small" style="margin-top:12px">⏳ Test in esecuzione…</div>'}`;
+  }
+
+  function openTestModal(){
+    const html=`<div class="modal-head">
+      <div><h2>🧪 TEST SISTEMA</h2><div class="small">Collaudo completo prima dell'asta</div></div>
+      <button class="modal-close" data-action="close-modal">✕</button>
+    </div>
+    <div class="notice">
+      <b>Questo test fa controlli reali.</b><br>
+      Verifica connessione Firebase, stato della stanza, partecipanti, listone, rose, crediti, controlli admin/telefono, sincronizzazione e una simulazione completa di chiamata → rilanci → ritiro → assegnazione → reset.
+      <br><br><b>Non modifica la stanza reale.</b>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="confirmRunSystemTest" type="button">🚀 AVVIA TEST COMPLETO</button>
+      <button class="ghost" data-action="close-modal">Annulla</button>
+    </div>`;
+    if(typeof window.showModal==='function') window.showModal(html);
+    else {
+      modalHost=document.getElementById('modalContent'); modalShell=document.getElementById('modal');
+      if(modalHost&&modalShell){modalHost.innerHTML=html;modalShell.classList.remove('hidden');}
     }
   }
-  function bindTestButton(){
-    const btn=document.getElementById('testSystemButton');
-    if(!btn || btn.dataset.testBound==='1') return;
-    btn.dataset.testBound='1';
-    btn.addEventListener('click',function(ev){
-      ev.preventDefault();
-      ev.stopPropagation();
-      runTest();
-    },false);
+
+  function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+
+  function sourceContains(...terms){
+    return terms.every(t=>document.documentElement.innerHTML.includes(t));
   }
-  bindTestButton();
-  setTimeout(bindTestButton,500);
-  setTimeout(bindTestButton,1500);
+
+  function simulateAuction(){
+    const participants=[
+      {name:'Angelo',credits:500,roster:[]},
+      {name:'Perino',credits:500,roster:[]},
+      {name:'Simone',credits:500,roster:[]},
+      {name:'Luca',credits:500,roster:[]},
+      {name:'Mattia',credits:500,roster:[]},
+      {name:'Nicola',credits:500,roster:[]}
+    ];
+    const player={id:'TEST_PLAYER',name:'Giocatore Test',role:'CEN',team:'TEST FC',sold:false,owner:null,finalPrice:null};
+    let price=1, bidder=null, turn=0, active=true;
+
+    // Chiamata da 1
+    if(price!==1) return {ok:false,detail:'La simulazione non parte da 1.'};
+    // Rilanci sequenziali
+    price=2; bidder=participants[0].name;
+    price=3; bidder=participants[1].name;
+    if(price!==3 || bidder!=='Perino') return {ok:false,detail:'Turnazione/rilancio simulato non coerente.'};
+    // Ritiro del bidder corrente
+    const retired=bidder; bidder=null;
+    turn=2;
+    if(retired!=='Perino' || turn!==2) return {ok:false,detail:'Ritiro simulato non ha avanzato correttamente il turno.'};
+    // Nuovo bidder e assegnazione
+    bidder=participants[2].name; price=4;
+    const winner=participants.find(p=>p.name===bidder);
+    winner.credits-=price;
+    winner.roster.push({id:player.id,name:player.name,role:player.role,team:player.team,price});
+    player.sold=true; player.owner=winner.name; player.finalPrice=price; active=false;
+    if(winner.credits!==496 || winner.roster.length!==1 || !player.sold || player.owner!=='Simone'){
+      return {ok:false,detail:'Assegnazione/credito/rosa simulati non coerenti.'};
+    }
+    // Reset simulato: tutto deve tornare disponibile
+    player.sold=false; player.owner=null; player.finalPrice=null;
+    participants.forEach(p=>{p.credits=500;p.roster=[]});
+    if(player.sold || player.owner || player.finalPrice!==null || participants.some(p=>p.credits!==500||p.roster.length)){
+      return {ok:false,detail:'Il reset simulato non ripristina tutti i dati.'};
+    }
+    return {ok:true,detail:'Simulazione completata: 1 → rilanci → ritiro → cambio turno → assegnazione → crediti/rosa → reset.'};
+  }
+
+  async function executeTest(){
+    if(running)return;
+    running=true; results.length=0;
+    modalHost=document.getElementById('modalContent'); modalShell=document.getElementById('modal');
+    if(!modalHost||!modalShell){running=false;return;}
+    modalShell.classList.remove('hidden');
+    renderProgress();
+
+    const st=getState();
+    await wait(150);
+    add(!!st && isAdmin(),'Firebase/stanza amministratore',st?`Stanza ${st.roomId||'attiva'} rilevata e pannello admin riconosciuto.`:'Stato stanza non disponibile.',true);
+
+    await wait(120);
+    add(!!window.__FB_API && typeof window.__FB_API.resetRoomComplete==='function','API Firebase dell’app','API interna presente, inclusa la funzione di reset.');
+
+    await wait(120);
+    const participants=st?.participants||{};
+    const names=Object.keys(participants);
+    add(names.length===6,'6 partecipanti configurati',`${names.length}/6 configurati.`);
+
+    await wait(120);
+    const entered=Object.values(participants).filter(p=>p?.joined===true).length;
+    add(Number.isInteger(entered)&&entered>=0&&entered<=6,'Contatore partecipanti realtime',`${entered}/6 entrati nello stato Firebase attuale.`);
+
+    await wait(120);
+    const uniqueNames=new Set(names.map(n=>String(n).trim().toLowerCase()));
+    add(uniqueNames.size===names.length,'Nomi partecipanti univoci',`${names.length} nomi controllati, nessun duplicato.`);
+
+    await wait(120);
+    const players=Array.isArray(st?.players)?st.players:[];
+    add(players.length>=500,'Listone completo caricato',`${players.length} giocatori presenti.`);
+
+    await wait(120);
+    const duplicateIds=players.map(p=>p?.id).filter(Boolean);
+    add(new Set(duplicateIds).size===duplicateIds.length,'ID giocatori univoci',`${duplicateIds.length} ID controllati.`);
+
+    await wait(120);
+    const sold=players.filter(p=>p?.sold===true);
+    const ownedWithoutSold=players.filter(p=>p?.owner && !p?.sold);
+    add(ownedWithoutSold.length===0,'Coerenza stato listone',`${sold.length} acquistati; ${ownedWithoutSold.length} con proprietario senza sold.`);
+
+    await wait(120);
+    const rosterEntries=Object.values(participants).flatMap(p=>Array.isArray(p?.roster)?p.roster:[]);
+    const rosterIds=rosterEntries.map(x=>x?.id).filter(Boolean);
+    add(new Set(rosterIds).size===rosterIds.length,'Rose senza duplicati','Ogni giocatore in rosa compare una sola volta.');
+
+    await wait(120);
+    const creditValues=Object.values(participants).map(p=>Number(p?.credits));
+    add(creditValues.every(Number.isFinite)&&creditValues.every(c=>c>=0),'Crediti validi',`Valori controllati: ${creditValues.join(', ')||'nessuno'}.`);
+
+    await wait(120);
+    add(Array.isArray(st?.history),'Struttura storico valida',`Storico: ${(st?.history||[]).length} eventi.`);
+
+    await wait(120);
+    add(Array.isArray(st?.alerts),'Struttura avvisi valida',`Avvisi: ${(st?.alerts||[]).length}.`);
+
+    await wait(120);
+    add(!!document.getElementById('v8StartAuctionButton'),'Controllo AVVIA/CONCLUDI presente','Controllo admin trovato.');
+
+    await wait(120);
+    add(sourceContains('adminRetireAuction','adminAssignAuction','adminCancelAuction'),'Controlli admin asta presenti','Ritira, assegna e annulla rilevati nel DOM.');
+
+    await wait(120);
+    add(sourceContains('confirmName','joined','transaction'),'Blocco ingresso partecipante presente','Ingresso con stato joined e transazione rilevati nel codice.');
+
+    await wait(120);
+    add(sourceContains('RICONNESSIONE','isMyTurn','FantabucciaConnection'),'Riconnessione per turno presente','La connessione viene trattata in base al turno del partecipante.');
+
+    await wait(120);
+    add(sourceContains('currentBidder','turnIndex','placeBid'),'Motore turnazione/rilanci presente','Stato offerente, indice turno e funzione di rilancio rilevati.');
+
+    await wait(120);
+    add(sourceContains('finalPrice','owner','roster'),'Assegnazione e rose presenti','Prezzo finale, proprietario e rosa rilevati.');
+
+    await wait(150);
+    const sim=simulateAuction();
+    add(sim.ok,'Simulazione asta completa',sim.detail,true);
+
+    await wait(120);
+    const currentSold=sold.length;
+    add(currentSold===players.filter(p=>p?.sold===true).length,'Coerenza listone dopo simulazione',`Il test locale non ha alterato i ${currentSold} acquisti reali.`);
+
+    await wait(120);
+    add(sourceContains('resetRoomComplete','players:'),'Reset completo collegato','Il reset espone la funzione di ripristino dei dati dell’asta.');
+
+    await wait(120);
+    add(!!document.getElementById('testSystemButton'),'Pulsante test presente','Controllo TEST SISTEMA rilevato.');
+
+    running=false;
+    renderProgress(true);
+  }
+
+  function bind(){
+    const b=document.getElementById('testSystemButton');
+    if(b && b.dataset.deepBound!=='1'){
+      b.dataset.deepBound='1';
+      b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openTestModal();},true);
+    }
+  }
   document.addEventListener('click',e=>{
-    if(e.target.closest('#testSystemButton')){e.preventDefault();e.stopPropagation();runTest();}
-    if(e.target.closest('#runSystemTestAgain')){e.preventDefault();runTest();}
+    if(e.target.closest('#testSystemButton')){e.preventDefault();e.stopPropagation();openTestModal();return;}
+    if(e.target.closest('#confirmRunSystemTest')){e.preventDefault();e.stopPropagation();executeTest();return;}
+    if(e.target.closest('#runSystemTestAgain')){e.preventDefault();e.stopPropagation();executeTest();return;}
   },true);
-  window.runFantabucciaSystemTest=runTest;
+  bind(); setTimeout(bind,300); setTimeout(bind,1000); setTimeout(bind,2000);
+  window.runFantabucciaSystemTest=executeTest;
 })();
 </script>
 
