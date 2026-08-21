@@ -606,6 +606,16 @@ function canOffer(name,role,price=state.currentPrice+1){
   return maxSpend(p)>=price;
 }
 
+function isLastOfferer(){
+  if(state.phase!=="auction" || !state.currentPlayer || !state.currentBidder) return false;
+  const retired=new Set(state.retired||[]);
+  const active=(state.activeBidders||[]).filter(n=>
+    !retired.has(n) &&
+    canOffer(n,state.currentPlayer.role,state.currentPrice)
+  );
+  return active.length===1 && active[0]===state.currentBidder;
+}
+
 function nextBidder(){
   if(!state?.currentPlayer)return null;
   const order=state.order||NAMES;
@@ -718,9 +728,11 @@ function renderAdmin(){
       ? "<b>⏸ ASTA IN PAUSA</b> — nessuna offerta può essere effettuata."
       : openingPending
         ? `<b>Puntata iniziale:</b> ${esc(next||"nessuno")} a ${state.currentPrice} crediti. Puoi anche passare al prossimo partecipante.`
-        : next
-          ? `<b>Turno:</b> ${esc(next)} • Massimo spendibile: ${state.participants[next].credits} cr`
-          : "<b>⚠️ Nessun altro offerente valido.</b> Il miglior offerente verrà assegnato automaticamente.";
+        : isLastOfferer()
+            ? `<b>🏆 ${esc(state.currentBidder)} è l'unico offerente rimasto.</b> Puoi modificare il prezzo se necessario e poi assegnare manualmente il giocatore.`
+            : next
+              ? `<b>Turno:</b> ${esc(next)} • Massimo spendibile: ${state.participants[next].credits} cr`
+              : "<b>⚠️ Nessun altro offerente valido.</b> Usa Assegna solo se c'è un offerente valido.";
     document.querySelectorAll(".bid-btn").forEach(b=>{ b.disabled=!firebaseConnected || state.paused || openingPending; });
     const cb=$("customBid"); const cbb=document.querySelector('[data-action="custom-bid"]');
     if(cb) cb.disabled=!firebaseConnected || state.paused || openingPending;
@@ -762,9 +774,15 @@ function renderParticipant(){
     $("publicMeta").textContent=`${state.currentPlayer.team||"Squadra"} • ${roleNormalize(state.currentPlayer.role)}`;
     $("publicPrice").textContent=state.currentPrice;
     $("publicBidder").textContent=state.currentBidder||"—";
-    const myTurn=state.currentBidder!==null && nextBidder()===me&&!state.paused;
+    const lastOfferer=isLastOfferer();
+    const myTurn=state.currentBidder!==null && nextBidder()===me&&!state.paused&&!lastOfferer;
     $("myTurnPanel").classList.toggle("hidden",!myTurn);
     $("notMyTurn").classList.toggle("hidden",myTurn);
+    if(lastOfferer && !state.paused){
+      $("notMyTurn").innerHTML=`<div style="font-size:20px;font-weight:900">🏆 SEI L'ULTIMO OFFERENTE</div><div style="margin-top:6px;font-weight:700">Attendi assegnazione</div>`;
+    }else if(!myTurn){
+      $("notMyTurn").innerHTML="Attendi il tuo turno.";
+    }
     $("myTurnInfo").textContent=`Offerta attuale ${state.currentPrice} cr • puoi arrivare fino a ${maxSpend(p)} cr.`;
     document.querySelectorAll(".public-bid").forEach(b=>b.disabled=!myTurn || !firebaseConnected);
     const retireBtn=$("publicRetireButton");
@@ -1131,6 +1149,7 @@ async function placeBid(who,amount,adminOverride=false){
   if(!navigator.onLine || !firebaseConnected) return toast("Connessione assente","Attendi la riconnessione prima di rilanciare.","red");
   if(state.phase!=="auction"||state.paused||!state.currentPlayer)return;
   if(state.currentBidder===null)return toast("Conferma prima la puntata iniziale","L'offerta di apertura deve essere confermata dall'admin prima dei rilanci.","yellow");
+  if(!adminOverride && isLastOfferer())return toast("Attendi assegnazione","Sei l'unico offerente rimasto.","yellow");
   const expected=nextBidder();
   if(who!==expected)return toast("Non è il tuo turno",`Tocca a ${expected||"nessuno"}.`,"yellow");
   const price=Number(amount);
@@ -1148,6 +1167,7 @@ async function adminBid(amount){
 }
 async function publicCustomBid(){
   if(!me)return;
+  if(isLastOfferer())return toast("Attendi assegnazione","Sei l'unico offerente rimasto.","yellow");
   await placeBid(me,Number($("publicCustomBid").value));
   $("publicCustomBid").value="";
 }
