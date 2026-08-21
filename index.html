@@ -644,14 +644,43 @@ async function joinRoom(){
 }
 
 function chooseParticipant(){
-  showModal(`<div class="modal-head"><div><h2>👥 Scegli il tuo nome</h2><div class="small">Seleziona il partecipante che stai usando.</div></div></div>
-  <select id="chooseName">${NAMES.map(n=>`<option value="${n}">${n}</option>`).join("")}</select>
-  <button class="primary" style="width:100%" data-action="confirm-name">Conferma e entra →</button>`);
+  const names = Object.keys(state?.participants || {}).length
+    ? Object.keys(state.participants)
+    : [...NAMES];
+
+  showModal(`
+    <div class="modal-head">
+      <div>
+        <h2>👥 Scegli il tuo nome</h2>
+        <div class="small">Tocca il tuo nome per selezionarlo, poi conferma.</div>
+      </div>
+    </div>
+    <div id="nameChoices" style="display:grid;gap:10px;margin:14px 0">
+      ${names.map(n=>`
+        <button type="button" class="person name-choice" data-name-choice="${esc(n)}"
+          style="text-align:left;padding:15px 16px;border:1px solid var(--line);background:#0b1728;border-radius:12px;color:#fff;cursor:pointer">
+          <b>👤 ${esc(n)}</b>
+          <span class="small">${Number(state?.participants?.[n]?.credits ?? START_CREDITS)} crediti</span>
+        </button>`).join("")}
+    </div>
+    <input id="chooseName" type="hidden" value="">
+    <button class="primary" style="width:100%" data-action="confirm-name">Conferma e entra →</button>
+  `);
 }
+
 async function confirmName(){
-  const n=$("chooseName")?.value;if(!n)return;
-  me=n;localStorage.setItem("fantabucciaName",me);closeModal();render();toast("Ingresso effettuato","Sei entrato come "+me,"green");
+  const n=$("chooseName")?.value?.trim();
+  if(!n || !state?.participants?.[n]){
+    toast("Seleziona il tuo nome","Prima devi toccare uno dei partecipanti.","yellow");
+    return;
+  }
+  me=n;
+  localStorage.setItem("fantabucciaName",me);
+  closeModal();
+  render();
+  toast("Ingresso effettuato","Sei entrato come "+me,"green");
 }
+
 function changeName(){chooseParticipant()}
 
 async function copyRoom(){
@@ -1024,6 +1053,17 @@ function bind(){
       if(action==="cancel-auction")return cancelAuction();
       if(action==="change-name")return changeName();
       if(action==="confirm-name")return confirmName();
+
+      const nameChoice=actionEl?.dataset.nameChoice;
+      if(nameChoice){
+        const input=$("chooseName");
+        if(input) input.value=nameChoice;
+        document.querySelectorAll("[data-name-choice]").forEach(b=>{
+          b.style.borderColor = b.dataset.nameChoice===nameChoice ? "var(--accent)" : "var(--line)";
+          b.style.background = b.dataset.nameChoice===nameChoice ? "#102b3a" : "#0b1728";
+        });
+        return;
+      }
 
       const bidder=actionEl?.dataset.bidder;
       if(bidder)return selectBidder(bidder);
