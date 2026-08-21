@@ -261,7 +261,7 @@ async function assignPlayer(){if(!state.currentPlayer||!state.currentBidder)retu
 async function cancelAuction(){if(!confirm("Annullare l'asta corrente? Nessun credito verrà scalato."))return;await save({phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,activeBidders:[],retired:[]});await logEvent("Asta corrente annullata","red")}
 async function skipCaller(){const i=(state.orderIndex+1)%state.order.length;await save({orderIndex:i});await logEvent(`Turno chiamata passato a ${state.order[i]}`,"yellow")}
 async function pauseAuction(){await save({paused:!state.paused});toast(state.paused?"Asta ripresa":"Asta in pausa",state.paused?"":"Le azioni sono sospese.","yellow")}
-function undo(){toast("Undo","Per sicurezza l'undo completo verrà abilitato nella prossima versione con snapshot automatici.","yellow")}
+async function undo(){if(!isAdmin||!state||!previousState)return toast("Impossibile annullare","Nessuna azione precedente disponibile.","red");state=JSON.parse(JSON.stringify(previousState));await save(state);toast("Assegnazione annullata","L'ultima operazione è stata annullata.","green")}
 function closeModal(){document.getElementById("modal").classList.add("hidden")}
 function copyRoom(){navigator.clipboard.writeText(roomId);toast("Copiato","Codice stanza: "+roomId,"green")}
 function openSettings(){document.getElementById("modal").classList.remove("hidden");document.getElementById("modalContent").innerHTML=`<h2>⚙ Impostazioni asta</h2><p class="small" style="margin:10px 0">Stagione: 2026/2027 • 6 partecipanti • 500 crediti • Rosa 25 (3/8/8/6).</p><label>Minimo per slot rimanente</label><input value="1" disabled><div class="toolbar"><button class="primary" onclick="closeModal()">Chiudi</button></div>`}
