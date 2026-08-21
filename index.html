@@ -78,7 +78,8 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
 }
 .queue{display:flex;justify-content:space-between;gap:8px}.queue.current{border-color:var(--accent);background:#102b2b}
 .person{cursor:pointer}.person:hover,.person.selected{border-color:var(--accent);background:#102b3a}
-.person-top{display:flex;justify-content:space-between;gap:8px}.money{font-weight:900;color:var(--accent)}
+.person-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.money{font-weight:900;color:var(--accent)}
+.roster-name-button{border:0;background:transparent;color:#fff;font-weight:900;padding:2px 4px;border-radius:7px;cursor:pointer;text-align:left}.roster-name-button:hover{background:#17304d;color:var(--accent);filter:none;transform:none}
 .status{font-size:10px;padding:4px 7px;border-radius:999px;background:#19332e;color:var(--accent)}
 .status.out{background:#3b1b25;color:#ff8792}.status.block{background:#3b3117;color:var(--yellow)}
 .progress{height:5px;background:#07101f;border-radius:8px;overflow:hidden;margin-top:7px}
@@ -396,7 +397,7 @@ const NAMES=["Angelo","Perino","Simone","Luca","Mattia","Nicola"];
 const DEFAULT_LIMITS={POR:3,DIF:8,CEN:8,ATT:6};
 const START_CREDITS=500;
 const ROSTER_SIZE=25;
-const VERSION=4;
+const VERSION=5;
 
 let roomId=null,isAdmin=false,me=null,state=null,unsubscribe=null;
 let undoStack=[];
@@ -610,13 +611,16 @@ function renderAdmin(){
       else status="BLOCCATO";
     }
     const cls=status==="RITIRATO"?"out":status==="BLOCCATO"?"block":"";
-    return `<div class="person ${state.currentBidder===n?"selected":""}" data-bidder="${esc(n)}">
-      <div class="person-top"><b>${esc(n)}</b><span class="money">${p.credits} cr</span></div>
+    return `<div class="person ${state.currentBidder===n?"selected":""}" data-bidder="${esc(n)}" title="Clicca sul nome per vedere la rosa">
+      <div class="person-top"><button type="button" class="roster-name-button" data-roster-name="${esc(n)}">👤 ${esc(n)}</button><span class="money">${p.credits} cr</span></div>
       <div class="small">${p.roster.length}/${state.rosterSize} • POR ${c.POR}/${state.limits.POR} · DIF ${c.DIF}/${state.limits.DIF} · CEN ${c.CEN}/${state.limits.CEN} · ATT ${c.ATT}/${state.limits.ATT}</div>
       <div class="progress"><i style="width:${Math.min(100,p.roster.length/state.rosterSize*100)}%"></i></div>
       <div style="margin-top:7px"><span class="status ${cls}">${status}</span>${state.currentBidder===n?" 👑 IN TESTA":""}</div>
     </div>`;
   }).join("");
+
+  const openRoster=$('rosterModal')?.dataset?.name;
+  if(openRoster && state.participants[openRoster]) renderRosterModalContent(openRoster);
 
   $("history").innerHTML=(state.history||[]).slice(0,20).map(e=>`<div class="alert ${esc(e.type||"")}"><b>${esc(e.at)}</b> — ${esc(e.text)}</div>`).join("");
   $("alerts").innerHTML=(state.alerts||[]).slice(0,15).map(e=>`<div class="alert ${esc(e.type||"")}"><b>${esc(e.at)}</b> — ${esc(e.text)}</div>`).join("");
@@ -742,26 +746,34 @@ async function joinRoom(){
 }
 
 function chooseParticipant(){
-  const names = Object.keys(state?.participants || {}).length
+  const allNames = Object.keys(state?.participants || {}).length
     ? Object.keys(state.participants)
     : [...NAMES];
+  const available = allNames.filter(n=>state?.participants?.[n]?.joined!==true || n===me);
+  const occupied = allNames.filter(n=>state?.participants?.[n]?.joined===true && n!==me);
 
   showModal(`
     <div class="modal-head">
       <div>
         <h2>👥 Scegli il tuo nome</h2>
-        <div class="small">Tocca il tuo nome per selezionarlo, poi conferma.</div>
+        <div class="small">Un nome può essere utilizzato da un solo dispositivo alla volta.</div>
       </div>
     </div>
     <div id="nameChoices" style="display:grid;gap:10px;margin:14px 0">
-      ${names.map(n=>`
+      ${available.map(n=>`
         <button type="button" class="person name-choice" data-name-choice="${esc(n)}"
-          style="text-align:left;padding:15px 16px;border:1px solid var(--line);background:#0b1728;border-radius:12px;color:#fff;cursor:pointer">
+          style="text-align:left;padding:15px 16px;border:1px solid ${n===me?'var(--accent)':'var(--line)'};background:${n===me?'#102b3a':'#0b1728'};border-radius:12px;color:#fff;cursor:pointer">
           <b>👤 ${esc(n)}</b>
-          <span class="small">${Number(state?.participants?.[n]?.credits ?? START_CREDITS)} crediti</span>
+          <span class="small">${Number(state?.participants?.[n]?.credits ?? START_CREDITS)} crediti${n===me?' • TU':''}</span>
+        </button>`).join("")}
+      ${occupied.map(n=>`
+        <button type="button" disabled class="person name-choice"
+          style="text-align:left;padding:15px 16px;border:1px solid var(--line);background:#0b1728;border-radius:12px;color:#77859a;cursor:not-allowed;opacity:.58">
+          <b>🔒 ${esc(n)}</b>
+          <span class="small">Già entrato nella stanza</span>
         </button>`).join("")}
     </div>
-    <input id="chooseName" type="hidden" value="">
+    <input id="chooseName" type="hidden" value="${esc(me||'')}">
     <button class="primary" style="width:100%" data-action="confirm-name">Conferma e entra →</button>
   `);
 }
@@ -769,17 +781,70 @@ function chooseParticipant(){
 async function confirmName(){
   const n=$("chooseName")?.value?.trim();
   if(!n || !state?.participants?.[n]){
-    toast("Seleziona il tuo nome","Prima devi toccare uno dei partecipanti.","yellow");return;
+    toast("Seleziona il tuo nome","Prima devi toccare uno dei partecipanti disponibili.","yellow");return;
   }
-  me=n;
-  localStorage.setItem("fantabucciaName",me);
-  const updated={...state.participants[n],joined:true,joinedAt:Date.now()};
-  await save({participants:{...state.participants,[n]:updated}},"Ingresso di "+n,true);
-  closeModal();
-  render();
-  toast("Ingresso effettuato","Sei entrato come "+me,"green");
+  const oldMe=me;
+  try{
+    const targetRef=roomRef();
+    await runTransaction(db,async tx=>{
+      const snap=await tx.get(targetRef);
+      if(!snap.exists())throw new Error("La stanza non esiste più.");
+      const fresh=normalize(snap.data());
+      const target=fresh.participants?.[n];
+      if(!target)throw new Error("Partecipante non trovato.");
+      if(target.joined===true && n!==oldMe)throw new Error("Questo nome è già stato scelto da un altro partecipante.");
+      const participants={...fresh.participants};
+      if(oldMe && oldMe!==n && participants[oldMe]){
+        participants[oldMe]={...participants[oldMe],joined:false,joinedAt:null};
+      }
+      participants[n]={...target,joined:true,joinedAt:Date.now()};
+      tx.update(targetRef,{participants,updatedAt:Date.now(),lastAction:(oldMe&&oldMe!==n?"Cambio nome di "+oldMe+" in "+n:"Ingresso di "+n)});
+    });
+    me=n;
+    localStorage.setItem("fantabucciaName",me);
+    closeModal();
+    render();
+    toast(oldMe&&oldMe!==n?"Nome cambiato":"Ingresso effettuato",oldMe&&oldMe!==n?"Ora sei "+me:"Sei entrato come "+me,"green");
+  }catch(e){
+    console.error(e);
+    toast("Nome non disponibile",e.message||"Questo nome è già occupato.","red");
+    state=normalize((await getDoc(roomRef())).data());
+    chooseParticipant();
+  }
 }
 function changeName(){chooseParticipant()}
+
+function renderRosterModalContent(name){
+  const p=state?.participants?.[name];
+  if(!p)return;
+  const roster=Array.isArray(p.roster)?p.roster:[];
+  const spent=(state.startingCredits||START_CREDITS)-Number(p.credits||0);
+  const c=counts(p);
+  const content=$('rosterModal');
+  if(!content)return;
+  content.innerHTML=`
+    <div class="modal-head">
+      <div><h2>👥 Rosa di ${esc(name)}</h2><div class="small">Aggiornata in tempo reale • ${roster.length}/${state.rosterSize} giocatori</div></div>
+      <button class="modal-close" data-action="close-modal">✕</button>
+    </div>
+    <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat"><b>${p.credits}</b><span>CREDITI RESIDUI</span></div>
+      <div class="stat"><b>${spent}</b><span>CREDITI SPESI</span></div>
+      <div class="stat"><b>${roster.length}/${state.rosterSize}</b><span>GIOCATORI</span></div>
+    </div>
+    <div class="notice">POR ${c.POR}/${state.limits.POR} · DIF ${c.DIF}/${state.limits.DIF} · CEN ${c.CEN}/${state.limits.CEN} · ATT ${c.ATT}/${state.limits.ATT}</div>
+    <div id="rosterRows" class="player-list">
+      ${roster.length?roster.map((x,i)=>`<div class="player"><div class="player-info"><div class="player-name">${i+1}. ${esc(x.name)}</div><div class="small">${esc(x.team||'')} • ${roleNormalize(x.role)}</div></div><b class="accent-text">${Number(x.price)||0} cr</b></div>`).join(''):`<div class="empty">Nessun giocatore acquistato.</div>`}
+    </div>
+  `;
+}
+
+function showParticipantRoster(name){
+  if(!isAdmin)return;
+  if(!state?.participants?.[name])return;
+  showModal(`<div id="rosterModal" data-name="${esc(name)}"></div>`);
+  renderRosterModalContent(name);
+}
 
 async function copyRoom(){
   if(!roomId)return;
@@ -1158,9 +1223,25 @@ function parseCSV(text){
   });
 }
 
-function logout(){
+async function logout(){
+  const leavingName=(!isAdmin&&me)?me:null;
+  const leavingRoom=roomId;
   if(unsubscribe){unsubscribe();unsubscribe=null}
+  if(leavingName&&leavingRoom){
+    try{
+      const ref=doc(db,"rooms",leavingRoom);
+      await runTransaction(db,async tx=>{
+        const snap=await tx.get(ref);
+        if(!snap.exists())return;
+        const fresh=normalize(snap.data());
+        const p=fresh.participants?.[leavingName];
+        if(!p)return;
+        tx.update(ref,{participants:{...fresh.participants,[leavingName]:{...p,joined:false,joinedAt:null}},updatedAt:Date.now(),lastAction:"Uscita di "+leavingName});
+      });
+    }catch(e){console.warn("Impossibile liberare il nome in uscita",e)}
+  }
   isAdmin=false;state=null;roomId=null;me=null;undoStack=[];
+  localStorage.removeItem("fantabucciaName");
   $("adminDashboard").classList.add("hidden");$("participantDashboard").classList.add("hidden");$("home").classList.remove("hidden");
   $("adminPassword").value="";$("roomCode").value="";
 }
@@ -1168,7 +1249,7 @@ function logout(){
 function bind(){
   if(listenersReady)return;listenersReady=true;
   document.addEventListener("click",async e=>{
-    const actionEl=e.target.closest("[data-action],[data-name-choice],[data-bid],[data-bidder],[data-start-player],[data-confirm-start],[data-edit-player],[data-remove-player],[data-save-player]");
+    const actionEl=e.target.closest("[data-action],[data-name-choice],[data-bid],[data-bidder],[data-roster-name],[data-start-player],[data-confirm-start],[data-edit-player],[data-remove-player],[data-save-player]");
     const action=actionEl?.dataset.action;
       const confirmStartId=actionEl?.dataset.confirmStart;
       if(confirmStartId){
@@ -1222,6 +1303,9 @@ function bind(){
         });
         return;
       }
+
+      const rosterName=actionEl?.dataset.rosterName;
+      if(rosterName)return showParticipantRoster(rosterName);
 
       const bidder=actionEl?.dataset.bidder;
       if(bidder)return selectBidder(bidder);
