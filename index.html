@@ -272,9 +272,9 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
           <button class="primary" data-action="custom-bid">Rilancia</button>
         </div>
         <div class="toolbar center">
-          <button class="warning" data-action="retire">🏳️ Ritira <span id="retireName">—</span></button>
-          <button class="success" data-action="assign">🏆 Assegna giocatore</button>
-          <button class="danger" data-action="cancel-auction">✕ Annulla asta</button>
+          <button type="button" id="adminRetireAuction" class="warning" data-action="retire" data-auction-control="retire" style="cursor:pointer;pointer-events:auto">🏳️ Ritira <span id="retireName">—</span></button>
+          <button type="button" id="adminAssignAuction" class="success" data-action="assign" data-auction-control="assign" style="cursor:pointer;pointer-events:auto">🏆 Assegna giocatore</button>
+          <button type="button" id="adminCancelAuction" class="danger" data-action="cancel-auction" data-auction-control="cancel" style="cursor:pointer;pointer-events:auto">✕ Annulla asta</button>
         </div>
         <div class="notice" id="auctionNotice"></div>
       </div>
@@ -1189,6 +1189,33 @@ window.addEventListener("error",e=>{
 });
 
 bind();
+
+// Robust direct handlers for the three administrator auction controls.
+// They deliberately stop propagation so the generic delegated click handler
+// cannot execute the same command a second time.
+(function bindAdminAuctionControls(){
+  const root = document.getElementById("adminDashboard");
+  if(!root) return;
+  const controls = [
+    ["adminRetireAuction", ()=>retire()],
+    ["adminAssignAuction", ()=>assign()],
+    ["adminCancelAuction", ()=>cancelAuction()]
+  ];
+  controls.forEach(([id,fn])=>{
+    const el=document.getElementById(id);
+    if(!el || el.dataset.directBound==="1") return;
+    el.dataset.directBound="1";
+    el.addEventListener("click", async e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      try{ await fn(); }
+      catch(err){
+        console.error(err);
+        if(typeof toast==="function") toast("Errore",err.message||"Operazione non riuscita.","red");
+      }
+    });
+  });
+})();
 </script>
 
 <script>
