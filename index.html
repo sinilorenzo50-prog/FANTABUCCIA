@@ -412,6 +412,7 @@ let dragOrder=null;
 let listenersReady=false;
 window.__FB_STATE=()=>state;
 window.__FB_ADMIN=()=>isAdmin;
+window.__FB_ROOM=()=>roomId;
 Object.defineProperty(window,"state",{configurable:true,get:()=>state});
 
 const $=id=>document.getElementById(id);
@@ -1342,8 +1343,34 @@ function bind(){
   $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
 }
 
+// Reset completo della stanza: mantiene il listone, azzera partecipanti, rose, asta, storico e avvisi.
+async function resetRoomComplete(){
+  if(!roomId) throw new Error("Nessuna stanza attiva da resettare.");
+  const ref=roomRef();
+  const snap=await getDoc(ref);
+  if(!snap.exists()) throw new Error("La stanza non esiste più.");
+  const fresh=normalize(snap.data());
+  const cleanParticipants={};
+  NAMES.forEach(name=>{
+    cleanParticipants[name]={name,credits:START_CREDITS,roster:[],active:true,joined:false,joinedAt:null};
+  });
+  await updateDoc(ref,{
+    participants:cleanParticipants,
+    order:[...NAMES], orderIndex:0,
+    phase:"calling", currentPlayer:null,currentPrice:0,currentBidder:null,
+    activeBidders:[],retired:[],
+    history:[],alerts:[],
+    paused:false,
+    auctionIntro:null,auctionStartedAt:null,auctionConclusion:null,
+    started:false,ended:false,auctionStarted:false,auctionEnded:false,
+    lastBid:null,
+    updatedAt:Date.now(),lastAction:"Reset completo asta"
+  });
+  return true;
+}
+
 // Bridge API for the non-module synchronized UI layer.
-window.__FB_API={save,uid,addEvent,closeModal,showModal};
+window.__FB_API={save,uid,addEvent,closeModal,showModal,resetRoomComplete};
 
 window.addEventListener("error",e=>{
   console.error(e.error||e.message);
@@ -1706,69 +1733,33 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
 <script>
 (function(){
   async function resetRoomComplete(){
-    if(!window.state || !window.state.roomId){
-      alert("Nessuna stanza attiva da resettare.");
+    const api=window.__FB_API;
+    if(!api || typeof api.resetRoomComplete!=="function"){
+      alert("L'applicazione non è ancora pronta. Ricarica la pagina e riprova.");
       return;
     }
-    const code = window.state.roomId;
-    const ok = confirm(
-      "⚠️ RESET COMPLETO ASTA\n\n" +
-      "Verranno cancellati dalla stanza:\n" +
-      "• partecipanti e nomi occupati\n" +
-      "• rose e crediti\n" +
-      "• giocatori assegnati/venduti\n" +
-      "• asta corrente\n" +
-      "• storico e attività\n" +
-      "• avvisi/notifiche\n" +
-      "• eventi di animazione\n" +
-      "• stato di test e progressi\n\n" +
-      "Il listone precaricato NON verrà cancellato.\n\n" +
+    const ok=confirm(
+      "⚠️ RESET COMPLETO ASTA\n\n"+
+      "Verranno cancellati dalla stanza:  partecipanti, rose, acquisti, asta corrente, storico, avvisi e animazioni.\n\n"+
+      "Il listone precaricato NON verrà cancellato.\n\n"+
       "Continuare?"
     );
-    if(!ok) return;
-
+    if(!ok)return;
     try{
-      const ref = window.doc(db, "rooms", code);
-      await window.updateDoc(ref, {
-        participants: [],
-        auction: null,
-        history: [],
-        activities: [],
-        alerts: [],
-        notifications: [],
-        animationEvents: [],
-        events: [],
-        started: false,
-        ended: false,
-        auctionStarted: false,
-        auctionEnded: false,
-        currentPlayer: null,
-        currentBidder: null,
-        currentPrice: 0,
-        lastBid: null,
-        soldPlayers: [],
-        assignedPlayers: [],
-        turnIndex: 0,
-        orderIndex: 0,
-        updatedAt: window.serverTimestamp()
-      });
-      alert("✅ ASTA RESETTATA\n\nLa stanza è tornata pulita per un nuovo test.");
+      await api.resetRoomComplete();
+      alert("✅ ASTA RESETTATA\n\nPartecipanti, storico e avvisi sono stati azzerati. Il listone è rimasto disponibile.");
     }catch(e){
-      console.error("Reset stanza:", e);
-      alert("❌ Impossibile completare il reset: " + (e.message || e));
+      console.error("Reset stanza:",e);
+      alert("❌ Impossibile completare il reset: "+(e?.message||e));
     }
   }
-
-  // Direct listener, independent from the app's generic dispatcher.
-  document.addEventListener("click", function(e){
-    const btn = e.target.closest('[data-action="reset-room"]');
-    if(!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
+  document.addEventListener("click",function(e){
+    const btn=e.target.closest('[data-action="reset-room"]');
+    if(!btn)return;
+    e.preventDefault();e.stopPropagation();
     resetRoomComplete();
-  }, true);
-
-  window.resetRoomComplete = resetRoomComplete;
+  },true);
+  window.resetRoomComplete=resetRoomComplete;
 })();
 </script>
 
