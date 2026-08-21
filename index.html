@@ -1433,7 +1433,8 @@ async function retireSelf(){
   if(!confirm(`Confermi di volerti ritirare dall'asta di ${state.currentPlayer.name}?`))return;
   await save({
     retired:[...new Set([...(state.retired||[]),me])],
-    activeBidders:(state.activeBidders||[]).filter(x=>x!==me)
+    activeBidders:(state.activeBidders||[]).filter(x=>x!==me),
+    lastRetireEvent:{name:me,ts:Date.now(),id:`${me}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`}
   },"Ritiro partecipante",true);
   await addEvent(`${me} si è ritirato da ${state.currentPlayer.name}`,"yellow");
   const winner=state.currentBidder;
@@ -2530,11 +2531,24 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
         const ended=prev.phase==="auction" && s.phase!=="auction" && prev.currentPlayer;
         const priceChanged=prev.phase==="auction" && s.phase==="auction" &&
           prev.currentPrice!==s.currentPrice && s.currentBidder;
-        const retiredNow=Array.isArray(s.retired)?s.retired:[];
-        const retiredBefore=Array.isArray(prev.retired)?prev.retired:[];
-        const newRetirements=retiredNow.filter(x=>!retiredBefore.includes(x));
-        if(newRetirements.length){
-          showRetireEverywhere(newRetirements[newRetirements.length-1]);
+        const eventNow=s.lastRetireEvent||null;
+        const eventBefore=prev.lastRetireEvent||null;
+        if(eventNow && eventNow.id && eventNow.id!==eventBefore?.id){
+          showRetireEverywhere(eventNow.name||"Partecipante");
+        }else{
+          const retiredNow=Array.isArray(s.retired)?s.retired:[];
+          const retiredBefore=Array.isArray(prev.retired)?prev.retired:[];
+          const newRetirements=retiredNow.filter(x=>{
+            const key = typeof x==="object" ? (x.name||x.id||JSON.stringify(x)) : x;
+            return !retiredBefore.some(y=>{
+              const yKey = typeof y==="object" ? (y.name||y.id||JSON.stringify(y)) : y;
+              return yKey===key;
+            });
+          });
+          if(newRetirements.length){
+            const r=newRetirements[newRetirements.length-1];
+            showRetireEverywhere(typeof r==="object" ? (r.name||r.id||"Partecipante") : r);
+          }
         }
         if(started) showCall(p);
         else if(ended){
@@ -2556,6 +2570,7 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
           id:s.currentPlayer.id,name:s.currentPlayer.name,team:s.currentPlayer.team,role:s.currentPlayer.role
         }:null,currentPrice:s.currentPrice,currentBidder:s.currentBidder,
         retired:Array.isArray(s.retired)?s.retired.slice():[],
+        lastRetireEvent:s.lastRetireEvent||null,
         players:Array.isArray(s.players)?s.players.map(x=>({id:x.id,sold:!!x.sold})):[],
         order:s.order,orderIndex:s.orderIndex
       }));
