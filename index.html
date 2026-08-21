@@ -383,6 +383,7 @@ let dragOrder=null;
 let listenersReady=false;
 window.__FB_STATE=()=>state;
 window.__FB_ADMIN=()=>isAdmin;
+Object.defineProperty(window,"state",{configurable:true,get:()=>state});
 
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -659,37 +660,25 @@ async function loginAdmin(){
 }
 
 async function joinRoom(){
-  let c=$('roomCode').value.trim().toUpperCase();
-  if(!c)return toast("Attenzione","Inserisci il codice stanza");
+  const c=$("roomCode").value.trim().toUpperCase();
+  if(!c){toast("Attenzione","Inserisci il codice stanza.","yellow");return}
   try{
-    admin=false;
-    room=c;
-    state=await roomData(false);
-    $('home').classList.add('hidden');
-    $('participant').classList.remove('hidden');
+    isAdmin=false;
+    roomId=c;
+    state=await loadRoom(roomId,false);
     me=null;
     localStorage.removeItem("fantabucciaName");
-    listen();
-    chooseName();
+    $("home").classList.add("hidden");
+    $("adminDashboard").classList.add("hidden");
+    $("participantDashboard").classList.remove("hidden");
+    listenRoom();
+    chooseParticipant();
     render();
+    toast("Stanza collegata","Seleziona il tuo nome per entrare.","green");
   }catch(e){
     console.error(e);
-    toast("Impossibile entrare","Codice stanza errato o stanza non disponibile");
+    toast("Impossibile entrare","Codice errato oppure stanza non disponibile.","red");
   }
-}
-  try{
-    isAdmin=false;roomId=code;state=await loadRoom(roomId,false);
-    $("home").classList.add("hidden");$("adminDashboard").classList.add("hidden");$("participantDashboard").classList.remove("hidden");
-    const saved=localStorage.getItem("fantabucciaName");
-    if(saved&&state.participants[saved]){
-      me=saved;
-      if(state.participants[saved].joined!==true){
-        await save({participants:{...state.participants,[saved]:{...state.participants[saved],joined:true,joinedAt:Date.now()}}},"Ingresso di "+saved,true);
-      }
-      listenRoom();render();
-    } else{listenRoom();chooseParticipant()}
-    toast("Stanza collegata","Connessione live attiva.","green");
-  }catch(e){console.error(e);toast("Impossibile entrare","Codice errato oppure stanza non ancora disponibile.","red")}
 }
 
 function chooseParticipant(){
@@ -780,6 +769,7 @@ function playersModal(){
   <input id="playerFile" type="file" accept=".csv,.xlsx,.xls" class="hidden">`);
   drawPlayers();
 }
+window.playersModal=playersModal;
 
 function drawPlayers(){
   const box=$("playerList");if(!box)return;
@@ -1143,6 +1133,11 @@ function bind(){
   });
   $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
 }
+
+window.addEventListener("error",e=>{
+  console.error(e.error||e.message);
+  if(typeof toast==="function") toast("Errore JavaScript",e.message||"Controlla la console.","red");
+});
 
 bind();
 </script>
