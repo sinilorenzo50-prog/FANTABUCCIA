@@ -145,26 +145,28 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
 <body>
 
 <style>
-#v7StartAuctionBar{
- display:none; margin:14px auto; max-width:1100px; padding:14px;
- border:1px solid rgba(255,190,70,.35); border-radius:16px;
- background:linear-gradient(135deg,rgba(255,166,0,.10),rgba(255,255,255,.03));
- box-shadow:0 10px 30px rgba(0,0,0,.18);
+#v8StartAuctionBar{
+ display:none; margin:14px auto; max-width:1100px; padding:16px;
+ border:1px solid rgba(255,190,70,.38); border-radius:18px;
+ background:linear-gradient(135deg,rgba(255,166,0,.12),rgba(255,255,255,.035));
+ box-shadow:0 12px 34px rgba(0,0,0,.22);
 }
-#v7StartAuctionBar.show{display:block}
-#v7StartAuctionButton{
- width:100%; min-height:62px; border:0; border-radius:14px; cursor:pointer;
- font-size:22px; font-weight:1000; letter-spacing:.04em;
- background:linear-gradient(135deg,#ffb300,#ff6a00); color:#111;
- box-shadow:0 8px 24px rgba(255,150,0,.28);
+#v8StartAuctionBar.show{display:block}
+#v8EnteredStatus{text-align:center;font-weight:900;margin-bottom:10px}
+#v8StartAuctionButton{
+ width:100%; min-height:64px; border:0; border-radius:15px; cursor:pointer;
+ font-size:23px; font-weight:1000; letter-spacing:.04em;
+ background:linear-gradient(135deg,#ffd23f,#ff7a00); color:#111;
+ box-shadow:0 9px 28px rgba(255,150,0,.30);
 }
-#v7StartAuctionButton:hover{transform:translateY(-1px);filter:brightness(1.06)}
-#v7StartAuctionBar .v7hint{text-align:center;margin-top:8px;opacity:.72;font-size:13px}
+#v8StartAuctionButton:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.3)}
+#v8StartAuctionBar .v8hint{text-align:center;margin-top:8px;opacity:.72;font-size:13px}
 </style>
 
-<div id="v7StartAuctionBar">
-  <button id="v7StartAuctionButton" type="button">🔥 AVVIA ASTA</button>
-  <div class="v7hint">Tutti i partecipanti sono entrati. Premi per iniziare la serata.</div>
+<div id="v8StartAuctionBar">
+  <div id="v8EnteredStatus">👥 Partecipanti entrati: <b id="v8EnteredCount">0/0</b></div>
+  <button id="v8StartAuctionButton" type="button" disabled>🔥 AVVIA ASTA</button>
+  <div class="v8hint">Il pulsante si attiva automaticamente quando tutti hanno effettuato l'ingresso.</div>
 </div>
 
 
@@ -401,7 +403,7 @@ function showModal(html){$("modalContent").innerHTML=html;$("modal").classList.r
 
 function baseState(){
   const participants={};
-  NAMES.forEach(name=>participants[name]={name,credits:START_CREDITS,roster:[],active:true});
+  NAMES.forEach(name=>participants[name]={name,credits:START_CREDITS,roster:[],active:true,joined:false,joinedAt:null});
   return {
     version:VERSION,season:"2026/2027",participants,order:[...NAMES],orderIndex:0,
     phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,
@@ -661,8 +663,13 @@ async function joinRoom(){
     isAdmin=false;roomId=code;state=await loadRoom(roomId,false);
     $("home").classList.add("hidden");$("adminDashboard").classList.add("hidden");$("participantDashboard").classList.remove("hidden");
     const saved=localStorage.getItem("fantabucciaName");
-    if(saved&&state.participants[saved]){me=saved;listenRoom();render()}
-    else{listenRoom();chooseParticipant()}
+    if(saved&&state.participants[saved]){
+      me=saved;
+      if(state.participants[saved].joined!==true){
+        await save({participants:{...state.participants,[saved]:{...state.participants[saved],joined:true,joinedAt:Date.now()}}},"Ingresso di "+saved,true);
+      }
+      listenRoom();render();
+    } else{listenRoom();chooseParticipant()}
     toast("Stanza collegata","Connessione live attiva.","green");
   }catch(e){console.error(e);toast("Impossibile entrare","Codice errato oppure stanza non ancora disponibile.","red")}
 }
@@ -1305,62 +1312,59 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
 
 <script>
 (function(){
-  function v7State(){
-    return window.state || null;
+  function stateNow(){ return window.state || null; }
+  function isAdminNow(){ return !!window.isAdmin; }
+  function namesNow(){
+    const st=stateNow();
+    return st && st.participants ? Object.keys(st.participants) : [];
   }
-  function v7IsAdmin(){
-    return !!window.isAdmin;
+  function enteredNow(){
+    const st=stateNow();
+    const ns=namesNow();
+    return ns.filter(n=>st.participants[n]?.joined===true).length;
   }
-  function v7Participants(){
-    const st=v7State();
-    return st && st.participants ? Object.values(st.participants) : [];
+  function allEntered(){
+    const ns=namesNow();
+    return ns.length>0 && enteredNow()===ns.length;
   }
-  function v7AllIn(){
-    const ps=v7Participants();
-    return ps.length>0 && ps.every(p => p && (p.joined===true || p.connected===true || p.online===true || p.entered===true));
+  function refreshStartBar(){
+    const bar=document.getElementById("v8StartAuctionBar");
+    const count=document.getElementById("v8EnteredCount");
+    const btn=document.getElementById("v8StartAuctionButton");
+    if(!bar||!count||!btn)return;
+    const total=namesNow().length;
+    const entered=enteredNow();
+    count.textContent=entered+"/"+total;
+    bar.classList.toggle("show",isAdminNow());
+    const ready=isAdminNow() && allEntered();
+    btn.disabled=!ready;
+    btn.textContent=ready ? "🔥 AVVIA ASTA" : "🔒 IN ATTESA DEI PARTECIPANTI";
   }
-  function v7AuctionStarted(){
-    const st=v7State();
-    if(!st) return false;
-    const phase=String(st.phase||st.auctionStatus||st.status||"").toLowerCase();
-    return !!(st.auctionStarted || st.started || phase==="auction" || phase==="live" || phase==="running");
-  }
-  function v7Show(){
-    const b=document.getElementById("v7StartAuctionBar");
-    if(!b) return;
-    b.classList.toggle("show", v7IsAdmin() && v7AllIn() && !v7AuctionStarted());
-  }
-  function v7Click(){
-    // Support the most common action names already used by the app.
-    const candidates=[
-      '[data-action="start-auction"]',
-      '[data-action="startauction"]',
-      '[data-action="avvia-asta"]',
-      '[data-action="avviaasta"]'
-    ];
-    for(const sel of candidates){
-      const el=document.querySelector(sel);
-      if(el){ el.click(); return true; }
+
+  async function realStartAuction(){
+    const st=stateNow();
+    if(!st || !isAdminNow() || !allEntered()) return;
+    if(st.phase==="auction"){
+      if(typeof window.toast==="function") window.toast("Asta già attiva","L'asta è già in corso.","yellow");
+      return;
     }
-    // If the existing app exposes a function, use it.
-    for(const fn of ["startAuction","startauction","avviaAsta","startAuctionShow"]){
-      if(typeof window[fn]==="function"){
-        window[fn]();
-        return true;
-      }
-    }
-    return false;
+    // Play the opening animation first, then open the player list so the admin
+    // can choose the first player and starting price.
+    if(typeof window.startAuctionShow==="function") window.startAuctionShow();
+    setTimeout(function(){
+      if(typeof window.playersModal==="function") window.playersModal();
+    }, 2100);
   }
+
   document.addEventListener("click",function(e){
-    if(e.target.closest("#v7StartAuctionButton")){
-      if(typeof window.startAuctionShow==="function") window.startAuctionShow();
-      setTimeout(v7Click,50);
-    }
+    if(e.target.closest("#v8StartAuctionButton")) realStartAuction();
   });
 
-  // Observe Firebase-driven DOM/state changes without modifying the existing app.
-  setInterval(v7Show,800);
-  setTimeout(v7Show,500);
+  // Firebase onSnapshot already calls render(); this independent check makes
+  // the bar update immediately after a participant's joined flag changes.
+  setInterval(refreshStartBar,500);
+  setTimeout(refreshStartBar,300);
+  window.refreshStartBar=refreshStartBar;
 })();
 </script>
 
