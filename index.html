@@ -141,6 +141,12 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
   .toolbar button{flex:1}.player{align-items:flex-start;flex-direction:column}.player-actions{width:100%;justify-content:stretch}
   .player-actions button{flex:1}
 }
+
+<style>
+  .danger{background:#7f1d1d!important;color:#fff!important;border:1px solid #ef4444!important}
+  .danger:hover{filter:brightness(1.12)}
+</style>
+
 </style>
 <script>
 /* FANTABUCCIA: listone 2026/27 preinstallato */
@@ -208,6 +214,7 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
       <button class="ghost" data-action="toggle-pause">⏸ Pausa</button>
       <button class="ghost" data-action="undo">↩ Annulla</button>
       <button class="ghost" data-action="logout">Esci</button>
+<button class="danger" data-action="reset-room" title="Cancella completamente la stanza e tutti i dati di test">🗑️ RESET ASTA</button>
     </div>
   </div>
 
@@ -1692,6 +1699,76 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
   },true);
   setInterval(refreshStartBar,400);
   setTimeout(refreshStartBar,100);
+})();
+</script>
+
+
+<script>
+(function(){
+  async function resetRoomComplete(){
+    if(!window.state || !window.state.roomId){
+      alert("Nessuna stanza attiva da resettare.");
+      return;
+    }
+    const code = window.state.roomId;
+    const ok = confirm(
+      "⚠️ RESET COMPLETO ASTA\n\n" +
+      "Verranno cancellati dalla stanza:\n" +
+      "• partecipanti e nomi occupati\n" +
+      "• rose e crediti\n" +
+      "• giocatori assegnati/venduti\n" +
+      "• asta corrente\n" +
+      "• storico e attività\n" +
+      "• avvisi/notifiche\n" +
+      "• eventi di animazione\n" +
+      "• stato di test e progressi\n\n" +
+      "Il listone precaricato NON verrà cancellato.\n\n" +
+      "Continuare?"
+    );
+    if(!ok) return;
+
+    try{
+      const ref = window.doc(db, "rooms", code);
+      await window.updateDoc(ref, {
+        participants: [],
+        auction: null,
+        history: [],
+        activities: [],
+        alerts: [],
+        notifications: [],
+        animationEvents: [],
+        events: [],
+        started: false,
+        ended: false,
+        auctionStarted: false,
+        auctionEnded: false,
+        currentPlayer: null,
+        currentBidder: null,
+        currentPrice: 0,
+        lastBid: null,
+        soldPlayers: [],
+        assignedPlayers: [],
+        turnIndex: 0,
+        orderIndex: 0,
+        updatedAt: window.serverTimestamp()
+      });
+      alert("✅ ASTA RESETTATA\n\nLa stanza è tornata pulita per un nuovo test.");
+    }catch(e){
+      console.error("Reset stanza:", e);
+      alert("❌ Impossibile completare il reset: " + (e.message || e));
+    }
+  }
+
+  // Direct listener, independent from the app's generic dispatcher.
+  document.addEventListener("click", function(e){
+    const btn = e.target.closest('[data-action="reset-room"]');
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resetRoomComplete();
+  }, true);
+
+  window.resetRoomComplete = resetRoomComplete;
 })();
 </script>
 
