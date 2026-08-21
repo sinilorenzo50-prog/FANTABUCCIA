@@ -145,6 +145,10 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
 <style>
   .danger{background:#7f1d1d!important;color:#fff!important;border:1px solid #ef4444!important}
   .danger:hover{filter:brightness(1.12)}
+
+<style>
+  .dot.offline{background:#ef4444!important;box-shadow:0 0 0 3px rgba(239,68,68,.14)!important}
+</style>
 </style>
 
 </style>
@@ -210,7 +214,7 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
   <div class="topbar">
     <div class="brand">🏆 FANTABUCCIA <span>Pannello amministratore • 2026/2027</span></div>
     <div class="toolbar">
-      <span class="live"><i id="liveDot" class="dot"></i><span id="liveText">PRONTO</span></span>
+      <span class="live"><i id="liveDot" class="dot"></i><span id="liveText">ONLINE</span></span>
       <button class="ghost" data-action="toggle-pause">⏸ Pausa</button>
       <button class="ghost" data-action="undo">↩ Annulla</button>
       <button class="ghost" data-action="logout">Esci</button>
@@ -309,7 +313,7 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
   <div class="topbar">
     <div class="brand">🏆 FANTABUCCIA <span id="publicUser">Partecipante</span></div>
     <div class="toolbar">
-      <span class="live"><i id="publicDot" class="dot"></i><span id="publicLive">LIVE</span></span>
+      <span class="live"><i id="publicDot" class="dot"></i><span id="publicLive">ONLINE</span></span>
       <button class="ghost" data-action="change-name">👤 Cambia nome</button>
       <button class="ghost" data-action="logout">Esci</button>
     </div>
@@ -405,9 +409,10 @@ const NAMES=["Angelo","Perino","Simone","Luca","Mattia","Nicola"];
 const DEFAULT_LIMITS={POR:3,DIF:8,CEN:8,ATT:6};
 const START_CREDITS=500;
 const ROSTER_SIZE=25;
-const VERSION=5;
+const VERSION=6;
 
 let roomId=null,isAdmin=false,me=null,state=null,unsubscribe=null;
+let firebaseConnected=false;
 let undoStack=[];
 let dragOrder=null;
 let listenersReady=false;
@@ -420,6 +425,19 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const uid=prefix=>prefix+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const nowTime=()=>new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});
+function setConnectionStatus(connected,reason="") {
+  firebaseConnected=Boolean(connected);
+  const adminText=$("liveText"), adminDot=$("liveDot"), publicText=$("publicLive"), publicDot=$("publicDot");
+  if(adminText) adminText.textContent=firebaseConnected?"ONLINE":"RICONNESSIONE…";
+  if(publicText) publicText.textContent=firebaseConnected?"ONLINE":"RICONNESSIONE…";
+  [adminDot,publicDot].forEach(d=>{if(d){d.classList.toggle("offline",!firebaseConnected);}});
+  document.querySelectorAll(".bid-btn,.public-bid").forEach(b=>{
+    if(!firebaseConnected) b.disabled=true;
+  });
+  const rb=$("publicRetireButton"); if(rb && !firebaseConnected) rb.disabled=true;
+}
+window.addEventListener("online",()=>{ if(roomId){ setConnectionStatus(false); toast("Connessione","Riconnessione in corso…","yellow"); } });
+window.addEventListener("offline",()=>{ setConnectionStatus(false); toast("Sei offline","Le offerte sono temporaneamente bloccate finché la connessione non torna.","red"); });
 const roleNormalize=v=>{
   const x=String(v??"").trim().toUpperCase();
   return ({P:"POR",PORTIERE:"POR",POR:"POR",PORT:"POR",D:"DIF",DIF:"DIF",DIFENSORE:"DIF",DIFENSORE:"DIF",C:"CEN",CEN:"CEN",CENTROCAMPISTA:"CEN",CENTROCAMPISTI:"CEN",M:"CEN",CC:"CEN",A:"ATT",ATT:"ATT",ATTACCANTE:"ATT",ATTACCANTI:"ATT"})[x]||x;
@@ -499,6 +517,7 @@ function listenRoom(){
     if(!snap.exists()){toast("Stanza non disponibile","La stanza è stata eliminata.","red");return}
     const previous=state;
     state=normalize(snap.data());
+    setConnectionStatus(navigator.onLine,true);
     render();
     // Notifica immediatamente anche la barra "partecipanti entrati" e gli altri
     // elementi UI che vivono nel layer non-module. Questo evita di aspettare
@@ -522,7 +541,8 @@ function listenRoom(){
     if(typeof window.__FB_FLUSH_ANIMATIONS==='function') window.__FB_FLUSH_ANIMATIONS();
   },err=>{
     console.error(err);
-    toast("Connessione","Problema nella sincronizzazione con Firebase.","red");
+    setConnectionStatus(false,err?.message||"");
+    toast("Riconnessione","Problema nella sincronizzazione con Firebase. Le offerte sono bloccate finché non torna la connessione.","red");
   });
 }
 
@@ -699,10 +719,10 @@ function renderParticipant(){
     $("myTurnPanel").classList.toggle("hidden",!myTurn);
     $("notMyTurn").classList.toggle("hidden",myTurn);
     $("myTurnInfo").textContent=`Offerta attuale ${state.currentPrice} cr • puoi arrivare fino a ${maxSpend(p)} cr.`;
-    document.querySelectorAll(".public-bid").forEach(b=>b.disabled=!myTurn);
+    document.querySelectorAll(".public-bid").forEach(b=>b.disabled=!myTurn || !firebaseConnected);
     const retireBtn=$("publicRetireButton");
     if(retireBtn){
-      retireBtn.disabled=!myTurn;
+      retireBtn.disabled=!myTurn || !firebaseConnected;
       retireBtn.title=myTurn?"Ritirati e passare il turno":"Disponibile solo durante il tuo turno";
     }
   }
@@ -996,6 +1016,7 @@ function firstAvailableBidder(p,price){
 }
 
 async function placeBid(who,amount){
+  if(!navigator.onLine || !firebaseConnected) return toast("Connessione assente","Attendi la riconnessione prima di rilanciare.","red");
   if(state.phase!=="auction"||state.paused||!state.currentPlayer)return;
   const expected=nextBidder();
   if(who!==expected)return toast("Non è il tuo turno",`Tocca a ${expected||"nessuno"}.`,"yellow");
@@ -1007,6 +1028,7 @@ async function placeBid(who,amount){
 }
 
 async function adminBid(amount){
+  if(!navigator.onLine || !firebaseConnected) return toast("Connessione assente","Attendi la riconnessione prima di rilanciare.","red");
   const who=nextBidder();if(!who)return toast("Asta terminata","Nessun altro offerente valido.","yellow");
   await placeBid(who,state.currentPrice+Number(amount));
 }
@@ -1403,6 +1425,7 @@ window.addEventListener("error",e=>{
   if(typeof toast==="function") toast("Errore JavaScript",e.message||"Controlla la console.","red");
 });
 
+setConnectionStatus(navigator.onLine && !!roomId);
 bind();
 
 // Robust direct handlers for the three administrator auction controls.
@@ -1856,6 +1879,104 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
     resetRoomComplete();
   },true);
   window.resetRoomComplete=resetRoomComplete;
+})();
+</script>
+
+
+<script>
+/* FANTABUCCIA - connessione turn-aware:
+   essere offline non blocca l'asta. Solo il partecipante offline quando
+   è effettivamente il suo turno vede "RICONNESSIONE..." e resta in attesa.
+*/
+(function(){
+  let connected = navigator.onLine !== false;
+  let lastRoomState = null;
+
+  function getRoomState(){
+    try {
+      if (window.state) return window.state;
+      if (typeof state !== 'undefined') return state;
+    } catch(e){}
+    return null;
+  }
+
+  function getMyName(){
+    const s = getRoomState();
+    if (!s) return null;
+    return s.myName || s.participantName || s.selectedName || null;
+  }
+
+  function getCurrentBidder(){
+    const s = getRoomState();
+    if (!s) return null;
+    return s.currentBidder || s.auction?.currentBidder || s.auction?.bidder || null;
+  }
+
+  function isMyTurn(){
+    const me = getMyName();
+    const bidder = getCurrentBidder();
+    return !!me && !!bidder && me === bidder;
+  }
+
+  function setStatus(){
+    const status = document.querySelector('[data-connection-status]');
+    if (!status) return;
+
+    if (!connected) {
+      if (isMyTurn()) {
+        status.textContent = '🔴 RICONNESSIONE…';
+        status.className = 'connection-status offline';
+      } else {
+        status.textContent = '⚪ OFFLINE';
+        status.className = 'connection-status passive-offline';
+      }
+    } else {
+      status.textContent = '🟢 ONLINE';
+      status.className = 'connection-status online';
+    }
+  }
+
+  function guardTurnActions(){
+    if (connected || !isMyTurn()) return;
+
+    // Only block actions on the participant's own device when it is their turn.
+    document.querySelectorAll(
+      '[data-action="bid"], [data-action="place-bid"], [data-action="raise"], ' +
+      '[data-action="custom-bid"], [data-action="withdraw"], [data-action="retire"]'
+    ).forEach(btn => {
+      btn.disabled = true;
+      btn.title = 'Riconnettiti per continuare il tuo turno';
+    });
+  }
+
+  function refresh(){
+    const s = getRoomState();
+    if (s) lastRoomState = s;
+    setStatus();
+    guardTurnActions();
+  }
+
+  window.addEventListener('online', function(){
+    connected = true;
+    refresh();
+    // Firebase onSnapshot remains the source of truth; once it fires,
+    // the normal render pipeline restores the current price/turn/auction.
+  });
+
+  window.addEventListener('offline', function(){
+    connected = false;
+    refresh();
+  });
+
+  // Do not stop timers or snapshots when offline.
+  setInterval(refresh, 1000);
+
+  // Expose a tiny hook for the app's render path.
+  window.FantabucciaConnection = {
+    isOnline: () => connected,
+    isMyTurn,
+    refresh
+  };
 })();
 </script>
 
