@@ -379,6 +379,23 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
   100%{transform:rotate(0) scale(1)}
 }
 
+
+/* ===== ASTA ANNULLATA ===== */
+.arcade-cancel{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;
+ background:rgba(7,8,15,.80);backdrop-filter:blur(11px);opacity:0;pointer-events:none;transition:opacity .18s ease}
+.arcade-cancel.show{opacity:1}
+.arcade-cancel-card{width:min(600px,92vw);padding:34px 24px;text-align:center;border-radius:28px;
+ background:linear-gradient(145deg,#24172a,#0b101d);border:1px solid rgba(255,111,145,.35);
+ box-shadow:0 30px 100px #000b,0 0 65px rgba(255,111,145,.13);transform:scale(.76) translateY(18px)}
+.arcade-cancel.show .arcade-cancel-card{animation:cancelIn .45s cubic-bezier(.16,1,.3,1) forwards}
+.arcade-cancel-icon{font-size:70px;line-height:1;animation:cancelX .55s ease-out}
+.arcade-cancel-kicker{margin-top:10px;font-size:12px;font-weight:1000;letter-spacing:.18em;text-transform:uppercase;color:#ff9fbd}
+.arcade-cancel-title{font-size:clamp(32px,7vw,58px);font-weight:1000;margin:7px 0}
+.arcade-cancel-name{font-size:20px;font-weight:900;color:#dbe6f5}
+.arcade-cancel-text{margin-top:6px;color:#9eafc4;font-size:14px;font-weight:800}
+@keyframes cancelIn{0%{opacity:0;transform:scale(.76) translateY(22px)}55%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
+@keyframes cancelX{0%{opacity:0;transform:scale(.6) rotate(-12deg)}45%{opacity:1;transform:scale(1.15) rotate(8deg)}100%{transform:scale(1) rotate(0)}}
+
 </style>
 </style>
 
@@ -2468,6 +2485,15 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
     clearTimeout(overlayTimer);
     overlayTimer=setTimeout(()=>hideOverlay(),2400);
   }
+  function showCancel(prev){
+    const o=$a("arcadeCancel"); if(!o)return;
+    const n=$a("arcadeCancelName");
+    if(n)n.textContent=safeText(prev?.currentPlayer?.name);
+    o.classList.remove("show"); void o.offsetWidth; o.classList.add("show");
+    o.setAttribute("aria-hidden","false");
+    setTimeout(()=>{o.classList.remove("show");o.setAttribute("aria-hidden","true")},1800);
+  }
+
   function showBid(who,amount){
     const box=$a("arcadeBidPop"); if(!box)return;
     $a("arcadeBidWho").textContent=safeText(who);
@@ -2481,6 +2507,19 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
     box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
   }
 
+  function showRetireEverywhere(name){
+    const el=document.getElementById("arcadeRetire");
+    const n=document.getElementById("arcadeRetireName");
+    if(!el||!n)return;
+    n.textContent=safeText(name);
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    el.setAttribute("aria-hidden","false");
+    clearTimeout(window.__arcadeRetireTimer);
+    window.__arcadeRetireTimer=setTimeout(()=>{
+      el.classList.remove("show");el.setAttribute("aria-hidden","true");
+    },1200);
+  }
+
   window.FantabucciaArcade={
     sync(s){
       if(!s)return;
@@ -2491,11 +2530,23 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
         const ended=prev.phase==="auction" && s.phase!=="auction" && prev.currentPlayer;
         const priceChanged=prev.phase==="auction" && s.phase==="auction" &&
           prev.currentPrice!==s.currentPrice && s.currentBidder;
+        const retiredNow=Array.isArray(s.retired)?s.retired:[];
+        const retiredBefore=Array.isArray(prev.retired)?prev.retired:[];
+        const newRetirements=retiredNow.filter(x=>!retiredBefore.includes(x));
+        if(newRetirements.length){
+          showRetireEverywhere(newRetirements[newRetirements.length-1]);
+        }
         if(started) showCall(p);
         else if(ended){
-          showWin(prev);
-          const next=s.order?.[s.orderIndex%s.order.length];
-          if(next) setTimeout(()=>showNext(next),2100);
+          const previousPlayer=prev.currentPlayer;
+          const stillAvailable=(Array.isArray(s.players)?s.players:[]).find(x=>x.id===previousPlayer.id);
+          if(stillAvailable && !stillAvailable.sold){
+            showCancel(prev);
+          }else{
+            showWin(prev);
+            const next=s.order?.[s.orderIndex%s.order.length];
+            if(next) setTimeout(()=>showNext(next),2100);
+          }
         }else if(priceChanged){
           showBid(s.currentBidder,s.currentPrice);
         }
@@ -2503,7 +2554,10 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
       previousArcadeState=JSON.parse(JSON.stringify({
         phase:s.phase,currentPlayer:s.currentPlayer?{
           id:s.currentPlayer.id,name:s.currentPlayer.name,team:s.currentPlayer.team,role:s.currentPlayer.role
-        }:null,currentPrice:s.currentPrice,currentBidder:s.currentBidder
+        }:null,currentPrice:s.currentPrice,currentBidder:s.currentBidder,
+        retired:Array.isArray(s.retired)?s.retired.slice():[],
+        players:Array.isArray(s.players)?s.players.map(x=>({id:x.id,sold:!!x.sold})):[],
+        order:s.order,orderIndex:s.orderIndex
       }));
     }
   };
@@ -2592,69 +2646,34 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
 </div>
 
 <script>
-/* ===== RITIRO: solo UI ===== */
+/* ===== RITIRO: presentation fallback ===== */
 (function(){
-  let lastRetire=null, retireTimer=null;
-  function showRetire(name){
-    const el=document.getElementById("arcadeRetire");
-    const n=document.getElementById("arcadeRetireName");
-    if(!el||!n)return;
-    n.textContent=name||"Partecipante";
-    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
-    el.setAttribute("aria-hidden","false");
-    clearTimeout(retireTimer);
-    retireTimer=setTimeout(()=>{
-      el.classList.remove("show");
-      el.setAttribute("aria-hidden","true");
-    },1200);
-  }
-  window.FantabucciaRetire={show:showRetire};
-
-  // Intercetta il click sui pulsanti di ritiro senza modificare il loro handler.
-  document.addEventListener("click",function(e){
-    const b=e.target.closest("button");
-    if(!b)return;
-    const t=(b.innerText||b.textContent||"").trim().toLowerCase();
-    if(!(t.includes("ritirati")||t.includes("ritiro")||t.includes("passa")))return;
-    const me=window.me||window.currentUserName||window.state?.currentBidder;
-    setTimeout(()=>{
-      showRetire(me||window.state?.currentBidder||"Partecipante");
-    },120);
-  },true);
-
-  // Inoltre osserva il cambiamento dello stato retired per coprire i ritiri
-  // effettuati da un altro dispositivo.
-  const originalSync=window.FantabucciaArcade?.sync;
-  if(originalSync){
-    window.FantabucciaArcade.sync=function(st){
-      try{
-        const prev=window.__arcadeRetiredState||[];
-        const now=Array.isArray(st?.retired)?st.retired:[];
-        const added=now.filter(x=>!prev.includes(x));
-        if(added.length) showRetire(added[added.length-1]);
-        window.__arcadeRetiredState=now.slice();
-      }catch(e){}
-      return originalSync.call(this,st);
-    };
-  }
-})();
-</script>
-
-
-<script>
-(function(){
-  let previous=[];
-  setInterval(function(){
-    if(!window.state || !window.FantabucciaRetire)return;
-    const now=Array.isArray(state.retired)?state.retired:[];
-    const added=now.filter(x=>!previous.includes(x));
-    if(added.length){
-      window.FantabucciaRetire.show(added[added.length-1]);
+  window.FantabucciaRetire=window.FantabucciaRetire||{
+    show:function(name){
+      const el=document.getElementById("arcadeRetire"),n=document.getElementById("arcadeRetireName");
+      if(!el||!n)return;
+      n.textContent=name||"Partecipante";
+      el.classList.remove("show");void el.offsetWidth;el.classList.add("show");
+      el.setAttribute("aria-hidden","false");
+      setTimeout(()=>{el.classList.remove("show");el.setAttribute("aria-hidden","true")},1200);
     }
-    previous=now.slice();
-  },250);
+  };
 })();
 </script>
+
+
+<script>/* remote retire is handled centrally by FantabucciaArcade.sync */</script>
+
+
+<div id="arcadeCancel" class="arcade-cancel" aria-hidden="true">
+  <div class="arcade-cancel-card">
+    <div class="arcade-cancel-icon">🚫</div>
+    <div class="arcade-cancel-kicker">ASTA ANNULLATA</div>
+    <div class="arcade-cancel-title">NESSUNA ASSEGNAZIONE</div>
+    <div id="arcadeCancelName" class="arcade-cancel-name">—</div>
+    <div class="arcade-cancel-text">Il giocatore torna disponibile nel listone.</div>
+  </div>
+</div>
 
 </body>
 </html>
