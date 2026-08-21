@@ -254,6 +254,13 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
         </div>
       </div>
 
+      <div id="adminFinishedView" class="hidden" style="text-align:center;padding:60px 20px">
+        <div class="phase">🏁 ASTA CONCLUSA</div>
+        <div class="big" style="font-size:clamp(42px,7vw,78px);margin-top:20px">🏆 FANTABUCCIA COMPLETATA</div>
+        <div class="meta" style="margin-top:12px">Tutti i risultati sono stati salvati in tempo reale.</div>
+        <button class="primary" style="margin-top:22px" data-action="ranking-modal">🏆 Vedi classifica finale</button>
+      </div>
+
       <div id="auctionView" class="hidden">
         <div class="phase">🔴 ASTA LIVE</div>
         <div id="currentPlayer" class="current pop">—</div>
@@ -304,6 +311,12 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
       <div class="small">📢 CHIAMATA A</div>
       <div class="big" id="publicCaller">—</div>
       <div class="small" style="margin-top:7px">Preparati: l'amministratore avvierà l'asta quando il giocatore viene chiamato.</div>
+    </div>
+
+    <div id="publicFinishedView" class="hidden" style="text-align:center;padding:55px 18px">
+      <div class="phase" style="display:flex;width:max-content;margin:auto">🏁 ASTA CONCLUSA</div>
+      <div class="public-name" style="font-size:clamp(42px,10vw,72px);margin-top:20px">🏆 GRAZIE!</div>
+      <div class="meta" style="text-align:center;margin-top:10px">L'asta è terminata. La tua rosa e i tuoi crediti sono stati salvati.</div>
     </div>
 
     <div id="publicAuction" class="hidden">
@@ -420,6 +433,7 @@ function baseState(){
     phase:"calling",currentPlayer:null,currentPrice:0,currentBidder:null,
     activeBidders:[],retired:[],players:(Array.isArray(window.FANTABUCCIA_PRELOADED_LISTONE)?window.FANTABUCCIA_PRELOADED_LISTONE.map(p=>({...p})):[]),history:[],alerts:[],paused:false,
     limits:{...DEFAULT_LIMITS},startingCredits:START_CREDITS,rosterSize:ROSTER_SIZE,
+    auctionIntro:null,auctionStartedAt:null,auctionConclusion:null,
     createdAt:Date.now(),updatedAt:Date.now(),lastAction:"Stanza creata"
   };
 }
@@ -446,7 +460,10 @@ function normalize(raw){
   s.retired=Array.isArray(s.retired)?s.retired:[];
   s.activeBidders=Array.isArray(s.activeBidders)?s.activeBidders:[];
   s.paused=Boolean(s.paused);
-  s.phase=s.phase==="auction"?"auction":"calling";
+  s.auctionStartedAt=Number(s.auctionStartedAt)||null;
+  s.auctionIntro=s.auctionIntro&&typeof s.auctionIntro==="object"?s.auctionIntro:null;
+  s.auctionConclusion=s.auctionConclusion&&typeof s.auctionConclusion==="object"?s.auctionConclusion:null;
+  s.phase=["auction","calling","finished"].includes(s.phase)?s.phase:"calling";
   s.rosterSize=Number(s.rosterSize)||ROSTER_SIZE;
   s.startingCredits=Number(s.startingCredits)||START_CREDITS;
   return s;
@@ -470,8 +487,29 @@ function listenRoom(){
   if(unsubscribe)unsubscribe();
   unsubscribe=onSnapshot(roomRef(),snap=>{
     if(!snap.exists()){toast("Stanza non disponibile","La stanza è stata eliminata.","red");return}
+    const previous=state;
     state=normalize(snap.data());
     render();
+
+    // Sincronizza l'animazione di avvio asta su TUTTI i dispositivi.
+    // L'admin scrive un token univoco in Firebase: ogni client che riceve
+    // quel token mostra la stessa intro, senza ripeterla ad ogni snapshot.
+    const intro=state.auctionIntro;
+    const previousId=previous?.auctionIntro?.id;
+    if(intro?.id && intro.id!==previousId && Number(intro.startedAt)>0){
+      const age=Date.now()-Number(intro.startedAt);
+      if(age>=-1500 && age<7000 && typeof window.startAuctionShow==='function'){
+        window.startAuctionShow();
+      }
+    }
+    const conclusion=state.auctionConclusion;
+    const previousConclusionId=previous?.auctionConclusion?.id;
+    if(conclusion?.id && conclusion.id!==previousConclusionId && Number(conclusion.startedAt)>0){
+      const age=Date.now()-Number(conclusion.startedAt);
+      if(age>=-1500 && age<9000 && typeof window.startAuctionEndShow==='function'){
+        window.startAuctionEndShow();
+      }
+    }
   },err=>{
     console.error(err);
     toast("Connessione","Problema nella sincronizzazione con Firebase.","red");
@@ -554,9 +592,9 @@ function render(){
 function renderAdmin(){
   const bought=NAMES.reduce((a,n)=>a+(state.participants[n]?.roster?.length||0),0);
   $("statBought").textContent=bought;
-  $("statPhase").textContent=state.phase==="auction"?"ASTA":"CHIAMATA";
+  $("statPhase").textContent=state.phase==="auction"?"ASTA":state.phase==="finished"?"CONCLUSA":"CHIAMATA";
   $("statRoom").textContent=roomId||"—";
-  $("liveText").textContent=state.paused?"IN PAUSA":state.phase==="auction"?"ASTA LIVE":"PRONTO";
+  $("liveText").textContent=state.paused?"IN PAUSA":state.phase==="auction"?"ASTA LIVE":state.phase==="finished"?"CONCLUSA":state.auctionStartedAt?"ASTA PRONTA":"PRONTO";
   $("liveDot").classList.toggle("pause",state.paused);
 
   const caller=state.order[state.orderIndex%state.order.length];
@@ -589,8 +627,10 @@ function renderAdmin(){
   $("alerts").innerHTML=(state.alerts||[]).slice(0,15).map(e=>`<div class="alert ${esc(e.type||"")}"><b>${esc(e.at)}</b> — ${esc(e.text)}</div>`).join("");
 
   const auction=state.phase==="auction";
-  $("callingView").classList.toggle("hidden",auction);
+  const finished=state.phase==="finished";
+  $("callingView").classList.toggle("hidden",auction||finished);
   $("auctionView").classList.toggle("hidden",!auction);
+  $("adminFinishedView")?.classList.toggle("hidden",!finished);
 
   if(auction&&state.currentPlayer){
     $("currentPlayer").textContent=state.currentPlayer.name;
@@ -611,12 +651,14 @@ function renderAdmin(){
 function renderParticipant(){
   if(!me){chooseParticipant();return}
   $("publicUser").textContent=`Sei ${me}`;
-  $("publicLive").textContent=state.paused?"IN PAUSA":state.phase==="auction"?"ASTA LIVE":"LIVE";
+  $("publicLive").textContent=state.paused?"IN PAUSA":state.phase==="auction"?"ASTA LIVE":state.phase==="finished"?"CONCLUSA":"LIVE";
   $("publicDot").classList.toggle("pause",state.paused);
 
   const auction=state.phase==="auction";
-  $("publicCalling").classList.toggle("hidden",auction);
+  const finished=state.phase==="finished";
+  $("publicCalling").classList.toggle("hidden",auction||finished);
   $("publicAuction").classList.toggle("hidden",!auction);
+  $("publicFinishedView")?.classList.toggle("hidden",!finished);
   $("publicCaller").textContent=state.order[state.orderIndex%state.order.length]||"—";
 
   const p=state.participants[me];
@@ -849,6 +891,7 @@ async function removePlayer(id){
 }
 
 function startAuctionModal(id){
+  if(state.phase==="finished")return toast("Asta conclusa","Non puoi avviare altre aste in una sessione conclusa.","yellow");
   const p=state.players.find(x=>x.id===id);if(!p||p.sold)return;
   showModal(`<div class="modal-head"><h2>🔴 Avvia asta</h2><button class="modal-close" data-action="players-modal">✕</button></div>
   <div class="banner" style="text-align:center"><div class="big">${esc(p.name)}</div><div class="small">${esc(p.team||"")} • ${roleNormalize(p.role)}</div></div>
@@ -857,6 +900,8 @@ function startAuctionModal(id){
   <div class="toolbar"><button class="ghost" data-action="players-modal">Annulla</button><button type="button" class="primary" data-confirm-start="${esc(id)}" style="cursor:pointer;pointer-events:auto;position:relative;z-index:5">🔴 AVVIA ASTA</button></div>`);
 }
 async function confirmStart(id){
+  if(state.phase==="finished")return toast("Asta conclusa","La sessione è terminata.","yellow");
+  if(!state.auctionStartedAt)return toast("Asta non avviata","Prima premi 🔥 AVVIA ASTA.","yellow");
   if(state.paused)return toast("Asta in pausa","Riprendi prima di avviare.","yellow");
   if(state.phase==="auction")return toast("Asta già attiva","Concludi prima l'asta corrente.","yellow");
   const p=state.players.find(x=>x.id===id);if(!p)return;
@@ -926,6 +971,7 @@ async function retire(){
   await addEvent(`${n} si è ritirato da ${state.currentPlayer.name}`,"yellow");
 }
 async function assign(){
+  if(state.phase!=="auction")return toast("Nessuna asta attiva","Non c’è un giocatore attualmente all’asta.","yellow");
   if(!state.currentPlayer||!state.currentBidder)return toast("Impossibile assegnare","Serve un offerente.","red");
   const winner=state.currentBidder,price=state.currentPrice,p=state.participants[winner];
   if(!canOffer(winner,state.currentPlayer.role,price))return toast("Errore","L'offerta non è più valida.","red");
@@ -1210,6 +1256,9 @@ function bind(){
   $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
 }
 
+// Bridge API for the non-module synchronized UI layer.
+window.__FB_API={save,uid,addEvent,closeModal,showModal};
+
 window.addEventListener("error",e=>{
   console.error(e.error||e.message);
   if(typeof toast==="function") toast("Errore JavaScript",e.message||"Controlla la console.","red");
@@ -1381,6 +1430,26 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
  </div>
 </div>
 
+<style>
+#auctionEndOverlay{position:fixed;inset:0;z-index:100001;display:none;place-items:center;background:radial-gradient(circle at center,rgba(78,28,18,.98),rgba(3,8,18,.99) 72%);color:#fff;text-align:center;overflow:hidden}
+#auctionEndOverlay.show{display:grid}
+#auctionEndOverlay .endBurst{position:absolute;inset:-20%;background:repeating-conic-gradient(from 0deg,transparent 0 7deg,rgba(255,190,70,.14) 8deg 10deg);animation:v5endspin 7s linear infinite}
+#auctionEndOverlay .endContent{position:relative;z-index:2;padding:20px}
+#auctionEndOverlay .endIcon{font-size:clamp(90px,18vw,190px);line-height:.9;animation:v5endpop .9s ease}
+#auctionEndOverlay .endTitle{font-size:clamp(42px,8vw,96px);font-weight:1000;letter-spacing:.03em;text-shadow:0 0 40px rgba(255,190,70,.5);animation:v5endpop .8s ease}
+#auctionEndOverlay .endSub{margin-top:14px;font-size:clamp(16px,2.5vw,24px);opacity:.8}
+@keyframes v5endpop{0%{transform:scale(.35) translateY(20px);opacity:0}65%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes v5endspin{to{transform:rotate(360deg)}}
+</style>
+<div id="auctionEndOverlay" aria-hidden="true">
+ <div class="endBurst"></div>
+ <div class="endContent">
+  <div class="endIcon">🏆</div>
+  <div class="endTitle">ASTA CONCLUSA!</div>
+  <div class="endSub" id="v5EndSub">La rosa è completa. Grazie a tutti!</div>
+ </div>
+</div>
+
 <script>
 (function(){
  const overlay=()=>document.getElementById("auctionIntroOverlay");
@@ -1388,8 +1457,10 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
  const go=()=>document.getElementById("v5IntroGo");
  const league=()=>document.getElementById("v5IntroLeague");
 
+ let introRunning=false;
  window.startAuctionShow=function(){
-   const o=overlay(); if(!o) return;
+   const o=overlay(); if(!o || introRunning) return;
+   introRunning=true;
    const settings=window.FantaV5?.settings||{};
    league().textContent=(settings.logo||"⚽")+" "+(settings.leagueName||"FANTABUCCIA");
    go().style.display="none"; count().style.display="block";
@@ -1408,9 +1479,20 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
        go().style.display="block";
        setTimeout(()=>{
          o.classList.remove("show"); o.setAttribute("aria-hidden","true");
+         introRunning=false;
        },1400);
      }
    },800);
+ };
+
+ window.startAuctionEndShow=function(){
+   const o=document.getElementById("auctionEndOverlay");
+   if(!o || o.classList.contains("show")) return;
+   const settings=window.FantaV5?.settings||{};
+   const sub=document.getElementById("v5EndSub");
+   if(sub) sub.textContent=(settings.logo||"🏆")+" "+(settings.leagueName||"FANTABUCCIA")+" • asta terminata";
+   o.classList.add("show"); o.setAttribute("aria-hidden","false");
+   setTimeout(()=>{o.classList.remove("show");o.setAttribute("aria-hidden","true")},3200);
  };
 
  // Any existing "avvia asta" action can opt into the animation before
@@ -1420,8 +1502,7 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
    if(!el) return;
    const a=(el.dataset.action||"").toLowerCase();
    if(a==="start-auction" || a==="startauction" || a==="avvia-asta" || a==="avviaasta"){
-     // Let the original application action execute; the animation is visual only.
-     startAuctionShow();
+     // The synchronized Firebase event is the single source of truth.
    }
  });
 })();
@@ -1435,27 +1516,74 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
   function namesNow(){ const st=stateNow(); return st && st.participants ? Object.keys(st.participants) : []; }
   function enteredNow(){ const st=stateNow(), ns=namesNow(); return st ? ns.filter(n=>st.participants[n]?.joined===true).length : 0; }
   function allEntered(){ const ns=namesNow(); return ns.length>0 && enteredNow()===ns.length; }
+  function api(){ return window.__FB_API||{}; }
+
   function refreshStartBar(){
     const bar=document.getElementById("v8StartAuctionBar"), count=document.getElementById("v8EnteredCount"), btn=document.getElementById("v8StartAuctionButton");
     if(!bar||!count||!btn)return;
+    const st=stateNow();
     const total=namesNow().length, entered=enteredNow();
     count.textContent=entered+"/"+total;
     bar.classList.toggle("show",isAdminNow());
-    const ready=isAdminNow() && allEntered();
-    btn.disabled=!ready;
-    btn.textContent=ready ? "🔥 AVVIA ASTA" : "🔒 IN ATTESA DEI PARTECIPANTI";
+    if(!st || !isAdminNow())return;
+
+    const finished=st.phase==="finished";
+    const started=!!st.auctionStartedAt;
+    if(finished){
+      btn.disabled=true;
+      btn.textContent="🏁 ASTA CONCLUSA";
+      btn.style.background="linear-gradient(135deg,#4b5563,#1f2937)";
+      btn.style.color="#fff";
+      return;
+    }
+    const ready=allEntered();
+    btn.disabled=started ? false : !ready;
+    btn.textContent=started ? "🏁 CONCLUDI ASTA" : (ready ? "🔥 AVVIA ASTA" : "🔒 IN ATTESA DEI PARTECIPANTI");
+    btn.style.background=started ? "linear-gradient(135deg,#ffb347,#ff5d6c)" : "linear-gradient(135deg,#ffd23f,#ff7a00)";
+    btn.style.color="#111";
   }
+
   async function realStartAuction(){
     const st=stateNow();
-    if(!st || !isAdminNow() || !allEntered()) {
+    if(!st || !isAdminNow() || !allEntered()){
       if(typeof window.toast==="function") window.toast("Non ancora pronto","Devono entrare tutti i partecipanti.","yellow");
       return;
     }
-    if(st.phase==="auction") return;
-    if(typeof window.startAuctionShow==="function") window.startAuctionShow();
-    setTimeout(()=>{ if(typeof window.playersModal==="function") window.playersModal(); },2700);
+    if(st.auctionStartedAt || st.phase==="finished"){
+      return concludeAuction();
+    }
+    const apiObj=api();
+    if(typeof apiObj.save!=="function"){
+      if(typeof window.toast==="function") window.toast("Errore","Collegamento con il motore dell'asta non disponibile.","red");
+      return;
+    }
+    const intro={id:(typeof apiObj.uid==="function"?apiObj.uid("intro"):"intro_"+Date.now()+"_"+Math.random().toString(36).slice(2)),startedAt:Date.now()};
+    await apiObj.save({auctionStartedAt:intro.startedAt,auctionIntro:intro,auctionConclusion:null},"Avvio ufficiale asta",true);
+    if(typeof apiObj.addEvent==="function") await apiObj.addEvent("🔥 Asta ufficialmente iniziata","green");
+    setTimeout(()=>{ if(typeof window.playersModal==="function" && stateNow()?.phase!=="finished") window.playersModal(); },2700);
   }
-  document.addEventListener("click",e=>{ if(e.target.closest("#v8StartAuctionButton")) realStartAuction(); });
+
+  async function concludeAuction(){
+    const st=stateNow();
+    if(!st || !isAdminNow())return;
+    if(!st.auctionStartedAt)return typeof window.toast==="function" ? window.toast("Asta non avviata","Prima devi premere Avvia asta.","yellow") : null;
+    if(st.phase==="auction")return typeof window.toast==="function" ? window.toast("Asta in corso","Prima assegna o annulla il giocatore attualmente all'asta.","yellow") : null;
+    if(st.phase==="finished")return;
+    if(!confirm("Concludere definitivamente l'asta?\n\nTutti i risultati resteranno salvati e i partecipanti vedranno l'animazione di conclusione."))return;
+    const apiObj=api();
+    if(typeof apiObj.save!=="function")return;
+    const conclusion={id:(typeof apiObj.uid==="function"?apiObj.uid("end"):"end_"+Date.now()+"_"+Math.random().toString(36)),startedAt:Date.now()};
+    await apiObj.save({phase:"finished",auctionConclusion:conclusion,currentPlayer:null,currentPrice:0,currentBidder:null,activeBidders:[],retired:[]},"🏁 Asta conclusa",true);
+    if(typeof apiObj.addEvent==="function") await apiObj.addEvent("🏁 ASTA CONCLUSA — risultati definitivi salvati","green");
+  }
+
+  document.addEventListener("click",e=>{
+    if(!e.target.closest("#v8StartAuctionButton"))return;
+    e.preventDefault();
+    e.stopPropagation();
+    const st=stateNow();
+    if(st?.auctionStartedAt) concludeAuction(); else realStartAuction();
+  },true);
   setInterval(refreshStartBar,400);
   setTimeout(refreshStartBar,100);
 })();
