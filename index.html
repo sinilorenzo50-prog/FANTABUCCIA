@@ -396,7 +396,7 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
 @keyframes cancelIn{0%{opacity:0;transform:scale(.76) translateY(22px)}55%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
 @keyframes cancelX{0%{opacity:0;transform:scale(.6) rotate(-12deg)}45%{opacity:1;transform:scale(1.15) rotate(8deg)}100%{transform:scale(1) rotate(0)}}
 
-</style>
+@media(max-width:720px){.public-grid{grid-template-columns:1fr}}\n</style>
 </style>
 
 </style>
@@ -627,6 +627,17 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
     <div class="card">
       <h3>👕 La mia rosa</h3>
       <div id="myRoster"></div>
+    </div>
+  </div>
+
+  <div class="public-grid" style="margin-top:15px">
+    <div class="card">
+      <h3>🚨 Avvisi <span class="small" style="float:right">LIVE</span></h3>
+      <div id="publicAlerts" class="alerts"></div>
+    </div>
+    <div class="card">
+      <h3>📜 Storico <span class="small" style="float:right">LIVE</span></h3>
+      <div id="publicHistory" class="alerts"></div>
     </div>
   </div>
 </div>
@@ -1017,6 +1028,21 @@ function renderParticipant(){
   const spent=state.startingCredits-p.credits;
   $("mySummary").innerHTML=`Hai speso <b>${spent}</b> crediti per <b>${p.roster.length}/${state.rosterSize}</b> giocatori. `+
     `Disponibili <b class="accent-text">${p.credits}</b> crediti.`;
+
+  // Firebase onSnapshot -> render(): avvisi e storico si aggiornano
+  // automaticamente e contemporaneamente su tutti i telefoni.
+  const publicAlerts=$("publicAlerts");
+  const publicHistory=$("publicHistory");
+  if(publicAlerts){
+    publicAlerts.innerHTML=(state.alerts||[]).slice(0,20).map(e=>
+      `<div class="alert ${esc(e.type||"")}"><b>${esc(e.at)}</b> — ${esc(e.text)}</div>`
+    ).join("") || `<div class="empty">Nessun avviso.</div>`;
+  }
+  if(publicHistory){
+    publicHistory.innerHTML=(state.history||[]).slice(0,30).map(e=>
+      `<div class="alert ${esc(e.type||"")}"><b>${esc(e.at)}</b> — ${esc(e.text)}</div>`
+    ).join("") || `<div class="empty">Nessun evento nello storico.</div>`;
+  }
 
   if(auction&&state.currentPlayer){
     $("publicPlayer").textContent=state.currentPlayer.name;
