@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#07101f">
-<title>FANTABUCCIA — Asta 2026/2027</title>
+<title>FANTABUCCIA V5 DEFINITIVA —  — Asta 2026/2027</title>
 <style>
 :root{
   --bg:#07101f;--panel:#101c30;--panel2:#14233a;--panel3:#0c1729;
@@ -1095,5 +1095,188 @@ function bind(){
 
 bind();
 </script>
+
+<script>
+/* FANTABUCCIA V5 — final polish layer */
+(function(){
+  const V5_KEY = "fantabuccia_v5_settings";
+  const defaults = {
+    leagueName:"FANTABUCCIA 2026/2027",
+    animations:true,
+    logo:"⚽",
+  };
+  function v5Load(){
+    try{return Object.assign({},defaults,JSON.parse(localStorage.getItem(V5_KEY)||"{}"))}
+    catch(e){return {...defaults}}
+  }
+  function v5Save(x){localStorage.setItem(V5_KEY,JSON.stringify(x))}
+  window.FantaV5 = {
+    settings:v5Load(),
+    save(){
+      v5Save(this.settings);
+      if(typeof toast==="function") toast("Impostazioni salvate","Configurazione V5 aggiornata.","green");
+    },
+    stats(){
+      const st=window.state||{};
+      const participants=st.participants||{};
+      const rows=Object.entries(participants).map(([name,p])=>({
+        name, credits:Number(p.credits??0), squad:(p.squad||p.roster||[]),
+      }));
+      const all=rows.flatMap(r=>Array.isArray(r.squad)?r.squad:[]);
+      const prices=all.map(x=>Number(x.price??x.cost??0)).filter(Number.isFinite);
+      return {
+        teams:rows.length,
+        totalPlayers:all.length,
+        highest:prices.length?Math.max(...prices):0,
+        lowest:prices.length?Math.min(...prices):0,
+        spent:prices.reduce((a,b)=>a+b,0),
+        richest:rows.slice().sort((a,b)=>b.credits-a.credits)[0]?.name||"—"
+      };
+    },
+    open(){
+      const x=this.settings;
+      const html=`
+      <div class="modal-head"><div><h2>⚙️ FANTABUCCIA — Impostazioni V5</h2>
+      <div class="small">Personalizza la lega e prepara la serata.</div></div></div>
+      <label>Nome della lega</label>
+      <input id="v5LeagueName" value="${String(x.leagueName).replace(/"/g,'&quot;')}">
+      <label>Logo / simbolo</label>
+      <input id="v5Logo" value="${String(x.logo).replace(/"/g,'&quot;')}">
+      <label style="display:flex;gap:10px;align-items:center;margin-top:12px">
+        <input id="v5Animations" type="checkbox" ${x.animations?"checked":""} style="width:auto">
+        Animazioni e modalità “spettacolo”
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+        <button class="primary" data-v5-save>💾 Salva</button>
+        <button data-v5-final>🏆 Anteprima finale</button>
+      </div>`;
+      if(typeof showModal==="function") showModal(html);
+    },
+    final(){
+      const st=this.stats();
+      const x=this.settings;
+      const html=`
+      <div class="modal-head"><div><h2>${x.logo} ${x.leagueName}</h2>
+      <div class="small">🏆 Riepilogo della serata</div></div></div>
+      <div class="cards" style="margin-top:12px">
+        <div class="card"><b>${st.teams}</b><span>Partecipanti</span></div>
+        <div class="card"><b>${st.totalPlayers}</b><span>Giocatori assegnati</span></div>
+        <div class="card"><b>${st.spent}</b><span>Crediti spesi</span></div>
+        <div class="card"><b>${st.richest}</b><span>Più crediti residui</span></div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>📊 Record asta</h3>
+        <p>🔥 Acquisto più caro: <b>${st.highest}</b> crediti</p>
+        <p>💎 Acquisto più economico: <b>${st.lowest}</b> crediti</p>
+      </div>
+      <button class="primary" style="width:100%;margin-top:14px" data-action="close-modal">Chiudi</button>`;
+      if(typeof showModal==="function") showModal(html);
+    }
+  };
+
+  document.addEventListener("click", function(e){
+    const save=e.target.closest("[data-v5-save]");
+    if(save){
+      const x=window.FantaV5.settings;
+      x.leagueName=document.getElementById("v5LeagueName")?.value.trim()||defaults.leagueName;
+      x.logo=document.getElementById("v5Logo")?.value.trim()||defaults.logo;
+      x.animations=!!document.getElementById("v5Animations")?.checked;
+      window.FantaV5.save();
+      if(typeof closeModal==="function") closeModal();
+      return;
+    }
+    const fin=e.target.closest("[data-v5-final]");
+    if(fin){window.FantaV5.final();return}
+  });
+})();
+</script>
+
+
+<style>
+#v5Badge{position:fixed;right:12px;bottom:12px;z-index:9999;padding:7px 11px;border-radius:999px;
+background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600 11px system-ui;opacity:.82}
+</style>
+<div id="v5Badge">FANTABUCCIA V5 • DEFINITIVA</div>
+
+
+<style>
+#auctionIntroOverlay{
+ position:fixed;inset:0;z-index:100000;display:none;place-items:center;
+ background:radial-gradient(circle at center,rgba(24,54,78,.98),rgba(3,8,18,.99) 70%);
+ color:#fff;text-align:center;overflow:hidden;
+}
+#auctionIntroOverlay.show{display:grid}
+#auctionIntroOverlay .burst{position:absolute;inset:0;opacity:.35;
+ background:repeating-conic-gradient(from 0deg,transparent 0 8deg,rgba(255,255,255,.12) 9deg 10deg);
+ animation:v5spin 8s linear infinite}
+#auctionIntroOverlay .introContent{position:relative;z-index:2}
+#auctionIntroOverlay .league{font-size:clamp(15px,2vw,22px);letter-spacing:.2em;text-transform:uppercase;opacity:.8}
+#auctionIntroOverlay .count{font-size:clamp(100px,22vw,260px);font-weight:1000;line-height:.85;
+ text-shadow:0 0 35px rgba(120,220,255,.55);animation:v5pop .8s ease}
+#auctionIntroOverlay .go{font-size:clamp(38px,8vw,100px);font-weight:1000;letter-spacing:.04em;
+ text-shadow:0 0 35px rgba(255,190,70,.5);animation:v5pop .7s ease}
+#auctionIntroOverlay .sub{margin-top:14px;font-size:18px;opacity:.75}
+.v5-flash{animation:v5flash .5s ease}
+@keyframes v5pop{0%{transform:scale(.25);opacity:0}65%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes v5spin{to{transform:rotate(360deg)}}
+@keyframes v5flash{0%{filter:brightness(1)}45%{filter:brightness(2.2)}100%{filter:brightness(1)}}
+</style>
+
+<div id="auctionIntroOverlay" aria-hidden="true">
+ <div class="burst"></div>
+ <div class="introContent">
+  <div class="league" id="v5IntroLeague">FANTABUCCIA</div>
+  <div class="count" id="v5IntroCount">3</div>
+  <div class="go" id="v5IntroGo" style="display:none">🔥 L'ASTA È INIZIATA!</div>
+  <div class="sub">Preparati alla chiamata del primo giocatore</div>
+ </div>
+</div>
+
+<script>
+(function(){
+ const overlay=()=>document.getElementById("auctionIntroOverlay");
+ const count=()=>document.getElementById("v5IntroCount");
+ const go=()=>document.getElementById("v5IntroGo");
+ const league=()=>document.getElementById("v5IntroLeague");
+
+ window.startAuctionShow=function(){
+   const o=overlay(); if(!o) return;
+   const settings=window.FantaV5?.settings||{};
+   league().textContent=(settings.logo||"⚽")+" "+(settings.leagueName||"FANTABUCCIA");
+   go().style.display="none"; count().style.display="block";
+   o.classList.add("show"); o.setAttribute("aria-hidden","false");
+
+   let n=3;
+   count().textContent=n;
+   const timer=setInterval(()=>{
+     n--;
+     if(n>0){
+       count().textContent=n;
+       count().classList.remove("v5-flash"); void count().offsetWidth; count().classList.add("v5-flash");
+     } else {
+       clearInterval(timer);
+       count().style.display="none";
+       go().style.display="block";
+       setTimeout(()=>{
+         o.classList.remove("show"); o.setAttribute("aria-hidden","true");
+       },1400);
+     }
+   },800);
+ };
+
+ // Any existing "avvia asta" action can opt into the animation before
+ // continuing with the application's own action handler.
+ document.addEventListener("click",function(e){
+   const el=e.target.closest("[data-action]");
+   if(!el) return;
+   const a=(el.dataset.action||"").toLowerCase();
+   if(a==="start-auction" || a==="startauction" || a==="avvia-asta" || a==="avviaasta"){
+     // Let the original application action execute; the animation is visual only.
+     startAuctionShow();
+   }
+ });
+})();
+</script>
+
 </body>
 </html>
