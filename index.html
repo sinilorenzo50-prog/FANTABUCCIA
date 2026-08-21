@@ -491,25 +491,20 @@ function listenRoom(){
     state=normalize(snap.data());
     render();
 
-    // Sincronizza l'animazione di avvio asta su TUTTI i dispositivi.
-    // L'admin scrive un token univoco in Firebase: ogni client che riceve
-    // quel token mostra la stessa intro, senza ripeterla ad ogni snapshot.
+    // EVENTI ANIMAZIONE SINCRONIZZATI: Firebase è la fonte unica.
+    // Non facciamo affidamento sul fatto che la funzione grafica sia già
+    // disponibile nel preciso istante dello snapshot: sui telefoni/mobile
+    // il caricamento degli script può avere tempi diversi. Mettiamo quindi
+    // l'evento in coda e lo riproviamo per alcuni secondi.
     const intro=state.auctionIntro;
     const previousId=previous?.auctionIntro?.id;
-    if(intro?.id && intro.id!==previousId && Number(intro.startedAt)>0){
-      const age=Date.now()-Number(intro.startedAt);
-      if(age>=-1500 && age<7000 && typeof window.startAuctionShow==='function'){
-        window.startAuctionShow();
-      }
-    }
+    if(intro?.id && intro.id!==previousId) window.__FB_PENDING_INTRO=intro;
+
     const conclusion=state.auctionConclusion;
     const previousConclusionId=previous?.auctionConclusion?.id;
-    if(conclusion?.id && conclusion.id!==previousConclusionId && Number(conclusion.startedAt)>0){
-      const age=Date.now()-Number(conclusion.startedAt);
-      if(age>=-1500 && age<9000 && typeof window.startAuctionEndShow==='function'){
-        window.startAuctionEndShow();
-      }
-    }
+    if(conclusion?.id && conclusion.id!==previousConclusionId) window.__FB_PENDING_END=conclusion;
+
+    if(typeof window.__FB_FLUSH_ANIMATIONS==='function') window.__FB_FLUSH_ANIMATIONS();
   },err=>{
     console.error(err);
     toast("Connessione","Problema nella sincronizzazione con Firebase.","red");
@@ -1458,6 +1453,33 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
  const league=()=>document.getElementById("v5IntroLeague");
 
  let introRunning=false;
+ let lastIntroPlayed=null;
+ let lastEndPlayed=null;
+
+ window.__FB_FLUSH_ANIMATIONS=function(){
+   const intro=window.__FB_PENDING_INTRO;
+   if(intro?.id && intro.id!==lastIntroPlayed && typeof window.startAuctionShow==='function'){
+     const age=Date.now()-Number(intro.startedAt||0);
+     // Accettiamo l'evento fino a 30 secondi: evita che un telefono lento
+     // o un browser mobile perda l'animazione pur avendo ricevuto Firebase.
+     if(age>=-3000 && age<30000){
+       lastIntroPlayed=intro.id;
+       window.__FB_PENDING_INTRO=null;
+       window.startAuctionShow();
+     }
+   }
+   const end=window.__FB_PENDING_END;
+   if(end?.id && end.id!==lastEndPlayed && typeof window.startAuctionEndShow==='function'){
+     const age=Date.now()-Number(end.startedAt||0);
+     if(age>=-3000 && age<30000){
+       lastEndPlayed=end.id;
+       window.__FB_PENDING_END=null;
+       window.startAuctionEndShow();
+     }
+   }
+ };
+ setInterval(()=>{ if(typeof window.__FB_FLUSH_ANIMATIONS==='function') window.__FB_FLUSH_ANIMATIONS(); },500);
+
  window.startAuctionShow=function(){
    const o=overlay(); if(!o || introRunning) return;
    introRunning=true;
