@@ -148,6 +148,192 @@ button:hover{transform:translateY(-1px);filter:brightness(1.06)}
 
 <style>
   .dot.offline{background:#ef4444!important;box-shadow:0 0 0 3px rgba(239,68,68,.14)!important}
+
+/* =========================
+   FANTABUCCIA ARCADE EDITION
+   Solo estetica/animazioni.
+   Nessuna modifica al motore Firebase/asta.
+   ========================= */
+.arcade-overlay{
+  position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;
+  padding:22px;background:rgba(3,7,18,.78);backdrop-filter:blur(12px);
+  opacity:0;pointer-events:none;transition:opacity .18s ease;
+}
+.arcade-overlay.show{opacity:1;pointer-events:auto}
+.arcade-stage{
+  width:min(760px,94vw);position:relative;text-align:center;overflow:hidden;
+  border:1px solid rgba(255,255,255,.16);border-radius:30px;
+  background:
+    radial-gradient(circle at 50% 35%,rgba(66,211,176,.20),transparent 35%),
+    linear-gradient(145deg,#0d1d35,#07101f 70%);
+  box-shadow:0 0 0 1px rgba(66,211,176,.12),0 35px 100px rgba(0,0,0,.65),0 0 80px rgba(66,211,176,.16);
+  padding:38px 24px 34px;transform:scale(.82) translateY(18px);
+  transition:transform .35s cubic-bezier(.16,1,.3,1);
+}
+.arcade-overlay.show .arcade-stage{transform:scale(1) translateY(0)}
+.arcade-kicker{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;
+  background:#17263c;border:1px solid #315072;color:#d9ebff;font-weight:1000;
+  font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+}
+.arcade-title{
+  margin:16px 0 6px;font-size:clamp(34px,7vw,72px);line-height:.95;
+  font-weight:1000;letter-spacing:-3px;text-transform:uppercase;
+  text-shadow:0 5px 25px rgba(0,0,0,.45);
+}
+.arcade-player{
+  font-size:clamp(30px,6vw,58px);font-weight:1000;margin:10px 0 3px;
+}
+.arcade-meta{color:#91a1b9;font-weight:800;font-size:14px}
+.arcade-price{
+  font-size:clamp(54px,10vw,100px);font-weight:1000;line-height:1;
+  color:var(--accent);margin:15px 0;
+  text-shadow:0 0 30px rgba(66,211,176,.35);
+}
+.arcade-price.bump{animation:arcadePriceBump .55s cubic-bezier(.16,1,.3,1)}
+.arcade-sub{font-size:16px;color:#dce7f5;font-weight:800}
+.arcade-winner{
+  display:inline-flex;align-items:center;gap:10px;margin-top:16px;padding:12px 18px;
+  border-radius:16px;background:rgba(66,211,176,.10);border:1px solid rgba(66,211,176,.35);
+  font-size:20px;font-weight:1000;
+}
+.arcade-scan{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;opacity:.35;
+}
+.arcade-scan:after{
+  content:"";position:absolute;left:-20%;top:-10%;width:140%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  box-shadow:0 0 18px var(--accent);animation:arcadeScan 1.7s linear infinite;
+}
+.arcade-grid{
+  position:absolute;inset:0;pointer-events:none;opacity:.13;
+  background-image:linear-gradient(rgba(255,255,255,.12) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.12) 1px,transparent 1px);
+  background-size:34px 34px;
+  mask-image:linear-gradient(to bottom,transparent,#000 30%,#000 70%,transparent);
+}
+.arcade-particles{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.arcade-particle{
+  position:absolute;width:7px;height:7px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 14px var(--accent);animation:arcadeParticle 1.2s ease-out forwards;
+}
+.arcade-flash{
+  position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;
+}
+.arcade-flash.play{animation:arcadeFlash .42s ease-out}
+.arcade-bid-pop{
+  position:fixed;left:50%;top:22%;z-index:9997;transform:translate(-50%,-20px) scale(.7);
+  opacity:0;pointer-events:none;padding:14px 22px;border-radius:18px;
+  background:linear-gradient(135deg,#17263c,#102b2b);border:1px solid var(--accent);
+  box-shadow:0 15px 50px rgba(0,0,0,.45),0 0 35px rgba(66,211,176,.2);
+  text-align:center;font-weight:1000;
+}
+.arcade-bid-pop.show{animation:arcadeBidPop .95s cubic-bezier(.16,1,.3,1) forwards}
+.arcade-bid-pop .who{font-size:12px;color:#91a1b9;letter-spacing:.1em}
+.arcade-bid-pop .amount{font-size:42px;color:var(--accent);line-height:1.05}
+.arcade-next{
+  position:fixed;left:50%;bottom:34px;z-index:9996;transform:translate(-50%,20px);
+  opacity:0;pointer-events:none;padding:11px 18px;border-radius:999px;
+  background:#17263c;border:1px solid #315072;box-shadow:0 12px 35px #0008;
+  font-weight:1000;white-space:nowrap;
+}
+.arcade-next.show{animation:arcadeNext .9s ease forwards}
+.arcade-call-card{animation:arcadeCardIn .55s cubic-bezier(.16,1,.3,1) both}
+.arcade-win .arcade-stage{
+  background:
+    radial-gradient(circle at 50% 35%,rgba(255,209,102,.22),transparent 35%),
+    linear-gradient(145deg,#241d0c,#07101f 72%);
+  border-color:rgba(255,209,102,.45);
+  box-shadow:0 0 0 1px rgba(255,209,102,.16),0 35px 100px rgba(0,0,0,.65),0 0 90px rgba(255,209,102,.16);
+}
+.arcade-win .arcade-price{color:var(--yellow);text-shadow:0 0 35px rgba(255,209,102,.4)}
+.arcade-win .arcade-kicker{border-color:rgba(255,209,102,.35);color:var(--yellow)}
+@keyframes arcadeCardIn{from{opacity:0;transform:translateY(28px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes arcadePriceBump{0%{transform:scale(1)}35%{transform:scale(1.18) rotate(-1deg)}70%{transform:scale(.96)}100%{transform:scale(1)}}
+@keyframes arcadeFlash{0%{opacity:0}12%{opacity:.8}100%{opacity:0}}
+@keyframes arcadeScan{from{transform:translateY(-10vh)}to{transform:translateY(110vh)}}
+@keyframes arcadeParticle{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(240deg) scale(.15)}}
+@keyframes arcadeBidPop{0%{opacity:0;transform:translate(-50%,-20px) scale(.7)}18%{opacity:1;transform:translate(-50%,0) scale(1.05)}70%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-10px) scale(.96)}}
+@keyframes arcadeNext{0%{opacity:0;transform:translate(-50%,20px)}20%{opacity:1;transform:translate(-50%,0)}75%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-8px)}}
+@media(max-width:700px){
+  .arcade-stage{padding:30px 17px 28px;border-radius:24px}
+  .arcade-title{letter-spacing:-2px}
+  .arcade-bid-pop{top:18%}
+}
+
+
+/* ===== GRAN FINALE ASTA ===== */
+.arcade-final{
+  position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;
+  padding:20px;background:rgba(2,5,14,.88);backdrop-filter:blur(16px);
+  opacity:0;pointer-events:none;transition:opacity .3s ease;overflow:hidden;
+}
+.arcade-final.show{opacity:1;pointer-events:auto}
+.arcade-final-stage{
+  position:relative;width:min(920px,95vw);min-height:min(700px,88vh);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  border-radius:34px;padding:45px 25px;
+  background:
+    radial-gradient(circle at 50% 28%,rgba(255,209,102,.25),transparent 28%),
+    radial-gradient(circle at 50% 75%,rgba(66,211,176,.14),transparent 32%),
+    linear-gradient(145deg,#101b32,#050a15 72%);
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 0 0 1px rgba(255,209,102,.12),0 40px 120px #000b,0 0 110px rgba(255,209,102,.14);
+  transform:scale(.72);transition:transform .65s cubic-bezier(.16,1,.3,1);
+}
+.arcade-final.show .arcade-final-stage{transform:scale(1)}
+.arcade-final-glow{
+  position:absolute;width:65%;aspect-ratio:1;border-radius:50%;
+  background:rgba(255,209,102,.10);filter:blur(50px);pointer-events:none;
+  animation:finalGlow 2.2s ease-in-out infinite alternate;
+}
+.arcade-final-kicker{
+  position:relative;font-size:13px;font-weight:1000;letter-spacing:.22em;color:#ffd166;
+  text-transform:uppercase;animation:finalDrop .7s both;
+}
+.arcade-final-title{
+  position:relative;margin:10px 0 5px;font-size:clamp(48px,10vw,105px);line-height:.88;
+  font-weight:1000;letter-spacing:-5px;text-transform:uppercase;
+  background:linear-gradient(180deg,#fff7d6,#ffd166 52%,#d8941e);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:0 15px 50px rgba(255,209,102,.18);
+  animation:finalTitle .85s cubic-bezier(.16,1,.3,1) both;
+}
+.arcade-final-subtitle{
+  position:relative;font-size:clamp(16px,3vw,25px);font-weight:900;color:#dbe6f5;
+  animation:finalDrop .9s .15s both;
+}
+.arcade-final-trophy{
+  position:relative;font-size:clamp(72px,15vw,150px);line-height:1;margin:12px 0;
+  filter:drop-shadow(0 0 28px rgba(255,209,102,.45));
+  animation:trophyFloat 2s ease-in-out infinite;
+}
+.arcade-final-line{
+  position:relative;width:min(560px,90%);height:1px;margin:14px 0 20px;
+  background:linear-gradient(90deg,transparent,#ffd166,transparent);
+}
+.arcade-final-status{
+  position:relative;color:#91a1b9;font-size:14px;font-weight:800;
+  animation:finalDrop 1s .25s both;
+}
+.arcade-final-particles{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.arcade-final-particle{
+  position:absolute;width:8px;height:8px;border-radius:2px;background:#ffd166;
+  box-shadow:0 0 18px #ffd166;animation:finalParticle 2.3s ease-out forwards;
+}
+.arcade-final-ring{
+  position:absolute;width:280px;height:280px;border-radius:50%;
+  border:1px solid rgba(255,209,102,.2);animation:finalRing 2.5s ease-out infinite;
+}
+.arcade-final-ring.r2{width:480px;height:480px;animation-delay:.65s}
+.arcade-final-ring.r3{width:720px;height:720px;animation-delay:1.3s}
+@keyframes finalTitle{from{opacity:0;transform:translateY(35px) scale(.75)}to{opacity:1;transform:none}}
+@keyframes finalDrop{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes trophyFloat{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-12px) rotate(2deg)}}
+@keyframes finalGlow{from{transform:scale(.85);opacity:.55}to{transform:scale(1.15);opacity:1}}
+@keyframes finalRing{0%{transform:scale(.3);opacity:.8}100%{transform:scale(1.35);opacity:0}}
+@keyframes finalParticle{0%{opacity:0;transform:translate(0,-20px) rotate(0)}12%{opacity:1}100%{opacity:0;transform:translate(var(--fx),var(--fy)) rotate(520deg)}}
+
 </style>
 </style>
 
@@ -661,6 +847,7 @@ function soldPlayers(){
 function render(){
   if(!state)return;
   if(isAdmin)renderAdmin(); else renderParticipant();
+  if(window.FantabucciaArcade) window.FantabucciaArcade.sync(state);
 }
 
 function renderAdmin(){
@@ -2138,6 +2325,214 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
     isMyTurn,
     refresh
   };
+})();
+</script>
+
+
+<!-- FANTABUCCIA ARCADE: presentation layer only -->
+<div id="arcadeOverlay" class="arcade-overlay" aria-hidden="true">
+  <div class="arcade-stage">
+    <div class="arcade-grid"></div>
+    <div class="arcade-scan"></div>
+    <div id="arcadeParticles" class="arcade-particles"></div>
+    <div id="arcadeFlash" class="arcade-flash"></div>
+    <div class="arcade-call-card">
+      <div id="arcadeKicker" class="arcade-kicker">⚡ NUOVA ASTA</div>
+      <div id="arcadeTitle" class="arcade-title">ASTA APERTA!</div>
+      <div id="arcadePlayer" class="arcade-player">—</div>
+      <div id="arcadeMeta" class="arcade-meta">—</div>
+      <div id="arcadePrice" class="arcade-price">1</div>
+      <div id="arcadeSub" class="arcade-sub">🔥 ASTA LIVE</div>
+      <div id="arcadeWinner" class="arcade-winner hidden">👑 <span>—</span></div>
+    </div>
+  </div>
+</div>
+<div id="arcadeBidPop" class="arcade-bid-pop" aria-hidden="true">
+  <div class="who">🔥 RILANCIO!</div>
+  <div id="arcadeBidWho" class="who">—</div>
+  <div id="arcadeBidAmount" class="amount">0</div>
+</div>
+<div id="arcadeNext" class="arcade-next" aria-hidden="true">⚡ PROSSIMA CHIAMATA: —</div>
+
+
+<script>
+/* FANTABUCCIA ARCADE — solo presentazione. Firebase e logica asta non vengono modificati. */
+(function(){
+  const $a=id=>document.getElementById(id);
+  let previousArcadeState=null;
+  let overlayTimer=null;
+  let popTimer=null;
+
+  function safeText(v){return v==null?"—":String(v)}
+  function roleText(v){
+    const m={POR:"PORTIERE",DIF:"DIFENSORE",CEN:"CENTROCAMPISTA",ATT:"ATTACCANTE"};
+    return m[v]||safeText(v);
+  }
+  function spawnParticles(){
+    const box=$a("arcadeParticles"); if(!box)return;
+    box.innerHTML="";
+    for(let i=0;i<34;i++){
+      const p=document.createElement("i");
+      p.className="arcade-particle";
+      p.style.left=(35+Math.random()*30)+"%";
+      p.style.top=(38+Math.random()*20)+"%";
+      p.style.setProperty("--dx",((Math.random()-.5)*520)+"px");
+      p.style.setProperty("--dy",((Math.random()-.7)*420)+"px");
+      p.style.animationDelay=(Math.random()*.16)+"s";
+      box.appendChild(p);
+    }
+  }
+  function hideOverlay(delay=0){
+    clearTimeout(overlayTimer);
+    overlayTimer=setTimeout(()=>{
+      const o=$a("arcadeOverlay");
+      if(o){o.classList.remove("show");o.setAttribute("aria-hidden","true")}
+    },delay);
+  }
+  function showCall(p){
+    if(!p)return;
+    const o=$a("arcadeOverlay"); if(!o)return;
+    o.classList.remove("arcade-win");
+    $a("arcadeKicker").textContent="⚡ NUOVA ASTA";
+    $a("arcadeTitle").textContent="ASTA APERTA!";
+    $a("arcadePlayer").textContent=safeText(p.name);
+    $a("arcadeMeta").textContent=`${safeText(p.team||"Squadra")} • ${roleText(p.role)}`;
+    $a("arcadePrice").textContent="1";
+    $a("arcadeSub").textContent="🔥 ASTA LIVE";
+    $a("arcadeWinner").classList.add("hidden");
+    const flash=$a("arcadeFlash"); flash.classList.remove("play"); void flash.offsetWidth; flash.classList.add("play");
+    spawnParticles();
+    o.classList.add("show"); o.setAttribute("aria-hidden","false");
+    clearTimeout(overlayTimer);
+    overlayTimer=setTimeout(()=>hideOverlay(),2200);
+  }
+  function showWin(prev){
+    const o=$a("arcadeOverlay"); if(!o)return;
+    const p=prev?.currentPlayer; if(!p)return;
+    o.classList.add("arcade-win");
+    $a("arcadeKicker").textContent="🏆 AGGIUDICATO!";
+    $a("arcadeTitle").textContent="VENDUTO!";
+    $a("arcadePlayer").textContent=safeText(p.name);
+    $a("arcadeMeta").textContent=`${safeText(p.team||"Squadra")} • ${roleText(p.role)}`;
+    $a("arcadePrice").textContent=safeText(prev.currentPrice);
+    $a("arcadeSub").textContent="🏆 ASTA CONCLUSA";
+    const w=$a("arcadeWinner"); w.classList.remove("hidden"); w.querySelector("span").textContent=safeText(prev.currentBidder);
+    spawnParticles();
+    const flash=$a("arcadeFlash"); flash.classList.remove("play"); void flash.offsetWidth; flash.classList.add("play");
+    o.classList.add("show"); o.setAttribute("aria-hidden","false");
+    clearTimeout(overlayTimer);
+    overlayTimer=setTimeout(()=>hideOverlay(),2400);
+  }
+  function showBid(who,amount){
+    const box=$a("arcadeBidPop"); if(!box)return;
+    $a("arcadeBidWho").textContent=safeText(who);
+    $a("arcadeBidAmount").textContent=safeText(amount);
+    box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
+    clearTimeout(popTimer); popTimer=setTimeout(()=>box.classList.remove("show"),1000);
+  }
+  function showNext(name){
+    const box=$a("arcadeNext"); if(!box)return;
+    box.textContent=`⚡ PROSSIMA CHIAMATA: ${safeText(name)}`;
+    box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
+  }
+
+  window.FantabucciaArcade={
+    sync(s){
+      if(!s)return;
+      const p=s.currentPlayer;
+      const prev=previousArcadeState;
+      if(prev){
+        const started=prev.phase!=="auction" && s.phase==="auction" && p;
+        const ended=prev.phase==="auction" && s.phase!=="auction" && prev.currentPlayer;
+        const priceChanged=prev.phase==="auction" && s.phase==="auction" &&
+          prev.currentPrice!==s.currentPrice && s.currentBidder;
+        if(started) showCall(p);
+        else if(ended){
+          showWin(prev);
+          const next=s.order?.[s.orderIndex%s.order.length];
+          if(next) setTimeout(()=>showNext(next),2100);
+        }else if(priceChanged){
+          showBid(s.currentBidder,s.currentPrice);
+        }
+      }
+      previousArcadeState=JSON.parse(JSON.stringify({
+        phase:s.phase,currentPlayer:s.currentPlayer?{
+          id:s.currentPlayer.id,name:s.currentPlayer.name,team:s.currentPlayer.team,role:s.currentPlayer.role
+        }:null,currentPrice:s.currentPrice,currentBidder:s.currentBidder
+      }));
+    }
+  };
+})();
+</script>
+
+
+<div id="arcadeFinal" class="arcade-final" aria-hidden="true">
+  <div class="arcade-final-stage">
+    <div class="arcade-final-glow"></div>
+    <div class="arcade-final-ring"></div>
+    <div class="arcade-final-ring r2"></div>
+    <div class="arcade-final-ring r3"></div>
+    <div id="arcadeFinalParticles" class="arcade-final-particles"></div>
+    <div class="arcade-final-trophy">🏆</div>
+    <div class="arcade-final-kicker">⚡ FANTABUCCIA • ASTA COMPLETATA ⚡</div>
+    <div class="arcade-final-title">FINE ASTA!</div>
+    <div class="arcade-final-subtitle">Tutte le operazioni sono concluse</div>
+    <div class="arcade-final-line"></div>
+    <div class="arcade-final-status">🎉 Le rose sono complete • Buona Fantastagione! 🎉</div>
+  </div>
+</div>
+
+<script>
+/* ===== GRAN FINALE: solo UI ===== */
+(function(){
+  function makeParticles(){
+    const box=document.getElementById("arcadeFinalParticles");
+    if(!box)return;
+    box.innerHTML="";
+    for(let i=0;i<90;i++){
+      const p=document.createElement("i");
+      p.className="arcade-final-particle";
+      p.style.left=(10+Math.random()*80)+"%";
+      p.style.top=(20+Math.random()*35)+"%";
+      p.style.setProperty("--fx",((Math.random()-.5)*900)+"px");
+      p.style.setProperty("--fy",(250+Math.random()*500)+"px");
+      p.style.animationDelay=(Math.random()*.9)+"s";
+      box.appendChild(p);
+    }
+  }
+  window.FantabucciaFinale={
+    show:function(){
+      const el=document.getElementById("arcadeFinal");
+      if(!el)return;
+      makeParticles();
+      el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+      el.setAttribute("aria-hidden","false");
+    },
+    hide:function(){
+      const el=document.getElementById("arcadeFinal");
+      if(!el)return;
+      el.classList.remove("show");
+      el.setAttribute("aria-hidden","true");
+    }
+  };
+})();
+</script>
+
+
+<script>
+(function(){
+  document.addEventListener("click",function(e){
+    const b=e.target.closest("button");
+    if(!b || !window.FantabucciaFinale)return;
+    const t=(b.innerText||b.textContent||"").trim().toLowerCase();
+    if(t.includes("concludi asta") || t.includes("fine asta") || t.includes("termina asta")){
+      setTimeout(function(){
+        if(window.state && state.phase!=="auction"){
+          window.FantabucciaFinale.show();
+        }
+      },350);
+    }
+  },true);
 })();
 </script>
 
