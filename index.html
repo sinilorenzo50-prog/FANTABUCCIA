@@ -968,7 +968,7 @@ function startAuctionModal(id){
   const p=state.players.find(x=>x.id===id);if(!p||p.sold)return;
   showModal(`<div class="modal-head"><h2>🔴 Avvia asta</h2><button class="modal-close" data-action="players-modal">✕</button></div>
   <div class="banner" style="text-align:center"><div class="big">${esc(p.name)}</div><div class="small">${esc(p.team||"")} • ${roleNormalize(p.role)}</div></div>
-  <div class="two"><div><label>Prezzo di partenza</label><input id="startPrice" type="number" min="1" value="${Number(p.price)||1}"></div><div><label>Modalità turno</label><select id="startMode"><option value="caller">Parte dal chiamante</option><option value="first">Primo offerente disponibile</option></select></div></div>
+  <div class="two"><div><label>Prezzo di partenza</label><input id="startPrice" type="number" min="1" value="1"></div><div><label>Modalità turno</label><select id="startMode"><option value="caller">Parte dal chiamante</option><option value="first">Primo offerente disponibile</option></select></div></div>
   <div class="notice">L'app controllerà automaticamente crediti e posti disponibili nella rosa.</div>
   <div class="toolbar"><button class="ghost" data-action="players-modal">Annulla</button><button type="button" class="primary" data-confirm-start="${esc(id)}" style="cursor:pointer;pointer-events:auto;position:relative;z-index:5">🔴 AVVIA ASTA</button></div>`);
 }
