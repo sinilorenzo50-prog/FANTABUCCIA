@@ -214,7 +214,8 @@ window.FANTABUCCIA_PRELOADED_LISTONE=[{"id":"pre0001","name":"Svilar","team":"Ro
       <button class="ghost" data-action="toggle-pause">⏸ Pausa</button>
       <button class="ghost" data-action="undo">↩ Annulla</button>
       <button class="ghost" data-action="logout">Esci</button>
-<button class="danger" data-action="reset-room" title="Cancella completamente la stanza e tutti i dati di test">🗑️ RESET ASTA</button>
+<button class="ghost" id="testSystemButton" type="button" title="Esegue un collaudo locale senza modificare la stanza">🧪 TEST SISTEMA</button>
+      <button class="danger" data-action="reset-room" title="Cancella completamente la stanza e tutti i dati di test">🗑️ RESET ASTA</button>
     </div>
   </div>
 
@@ -1359,8 +1360,28 @@ async function resetRoomComplete(){
   NAMES.forEach(name=>{
     cleanParticipants[name]={name,credits:START_CREDITS,roster:[],active:true,joined:false,joinedAt:null};
   });
+  // Il reset dei test deve riportare il listone esattamente allo stato iniziale.
+  // In precedenza venivano azzerate rose/storico ma NON state.players: per questo
+  // Svilar/Martinez ecc. rimanevano marcati "acquistati" nel Gestisci listone.
+  const cleanPlayers=(Array.isArray(window.FANTABUCCIA_PRELOADED_LISTONE)
+    ? window.FANTABUCCIA_PRELOADED_LISTONE.map(p=>({
+        ...p,
+        sold:false,
+        owner:null,
+        finalPrice:null,
+        purchasedAt:null
+      }))
+    : fresh.players.map(p=>({
+        ...p,
+        sold:false,
+        owner:null,
+        finalPrice:null,
+        purchasedAt:null
+      })));
+
   await updateDoc(ref,{
     participants:cleanParticipants,
+    players:cleanPlayers,
     order:[...NAMES], orderIndex:0,
     phase:"calling", currentPlayer:null,currentPrice:0,currentBidder:null,
     activeBidders:[],retired:[],
@@ -1741,6 +1762,48 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
 })();
 </script>
 
+
+<script>
+(function(){
+  function escT(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+  function getState(){return window.__FB_STATE?window.__FB_STATE():null}
+  function isAdmin(){return window.__FB_ADMIN?window.__FB_ADMIN():false}
+  function row(ok,label,detail){
+    return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid ${ok?'rgba(66,220,190,.28)':'rgba(255,93,108,.35)'};background:${ok?'rgba(66,220,190,.06)':'rgba(255,93,108,.06)'};border-radius:10px;margin:7px 0"><b style="min-width:24px;color:${ok?'#42dcbe':'#ff5d6c'}">${ok?'✓':'✕'}</b><div><b>${escT(label)}</b><div class="small">${escT(detail)}</div></div></div>`;
+  }
+  function runTest(){
+    const st=getState();
+    const rows=[];
+    rows.push(row(!!st && isAdmin(),'Stanza Firebase attiva',st?`Stanza ${st.roomId||'attiva'} collegata e pannello admin aperto.`:'Nessuno stato stanza disponibile.'));
+    rows.push(row(!!st && st.participants && Object.keys(st.participants).length===6,'6 partecipanti configurati',st?`${Object.keys(st.participants).length}/6 partecipanti presenti nella configurazione.`:'Stato non disponibile.'));
+    const entered=st?.participants?Object.values(st.participants).filter(p=>p?.joined===true).length:0;
+    rows.push(row(!!st, 'Contatore ingressi realtime pronto',st?`${entered}/6 entrati in questo momento.`:'Non verificabile.'));
+    const players=Array.isArray(st?.players)?st.players:[];
+    rows.push(row(players.length>=500,'Listone caricato',`${players.length} giocatori presenti.`));
+    const sold=players.filter(p=>p.sold===true);
+    rows.push(row(sold.length===0,'Listone pulito','Nessun giocatore risulta acquistato. Se vedi venduti dopo un test, usa RESET ASTA.'));
+    const rosters=st?Object.values(st.participants||{}).reduce((n,p)=>n+(p?.roster?.length||0),0):0;
+    rows.push(row(rosters===0,'Rose di test vuote',`${rosters} giocatori assegnati.`));
+    const creditsOk=st?Object.values(st.participants||{}).every(p=>Number(p.credits)===Number(st.startingCredits||500)):false;
+    rows.push(row(creditsOk,'Crediti ripristinati',st?`Tutti a ${st.startingCredits||500} crediti.`:'Non verificabile.'));
+    rows.push(row((st?.history||[]).length===0,'Storico vuoto',`${(st?.history||[]).length} eventi.`));
+    rows.push(row((st?.alerts||[]).length===0,'Avvisi vuoti',`${(st?.alerts||[]).length} avvisi.`));
+    rows.push(row(st?.phase==='calling' && !st?.auctionStartedAt,'Asta in stato pronto',st?`Fase: ${st.phase}; asta avviata: ${st.auctionStartedAt?'sì':'no'}.`:'Non verificabile.'));
+    rows.push(row(!!document.getElementById('v8StartAuctionButton'),'Controllo AVVIA/CONCLUDI presente','Il pulsante sincronizzato admin è presente nella pagina.'));
+    const modal=document.getElementById('modalContent');
+    const passed=rows.filter(x=>x.includes('>✓<')).length;
+    const total=rows.length;
+    if(typeof window.showModal==='function'){
+      window.showModal(`<div class="modal-head"><div><h2>🧪 Collaudo FANTABUCCIA</h2><div class="small">Controllo locale non modifica Firebase e non manda eventi ai partecipanti.</div></div><button class="modal-close" data-action="close-modal">✕</button></div><div class="notice"><b>${passed}/${total} controlli superati</b><br>Questo test verifica integrità e stato attuale. Non sostituisce una prova reale con più telefoni.</div>${rows.join('')}<div class="toolbar"><button class="primary" id="runSystemTestAgain" type="button">🔄 Ripeti test</button><button class="ghost" data-action="close-modal">Chiudi</button></div>`);
+    }
+  }
+  document.addEventListener('click',e=>{
+    if(e.target.closest('#testSystemButton')){e.preventDefault();e.stopPropagation();runTest();}
+    if(e.target.closest('#runSystemTestAgain')){e.preventDefault();runTest();}
+  },true);
+  window.runFantabucciaSystemTest=runTest;
+})();
+</script>
 
 <script>
 (function(){
