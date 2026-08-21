@@ -1790,13 +1790,34 @@ background:#101b2b;color:#9ff6c8;border:1px solid rgba(159,246,200,.35);font:600
     rows.push(row((st?.alerts||[]).length===0,'Avvisi vuoti',`${(st?.alerts||[]).length} avvisi.`));
     rows.push(row(st?.phase==='calling' && !st?.auctionStartedAt,'Asta in stato pronto',st?`Fase: ${st.phase}; asta avviata: ${st.auctionStartedAt?'sì':'no'}.`:'Non verificabile.'));
     rows.push(row(!!document.getElementById('v8StartAuctionButton'),'Controllo AVVIA/CONCLUDI presente','Il pulsante sincronizzato admin è presente nella pagina.'));
-    const modal=document.getElementById('modalContent');
-    const passed=rows.filter(x=>x.includes('>✓<')).length;
     const total=rows.length;
+    // Calcoliamo il risultato in modo affidabile: row() restituisce un frammento HTML,
+    // quindi il precedente controllo con includes('>✓<') poteva non riconoscere i check.
+    const passed=rows.reduce((n,x)=>n + (x.includes('>✓</b>') ? 1 : 0),0);
+    const modalHtml=`<div class="modal-head"><div><h2>🧪 Collaudo FANTABUCCIA</h2><div class="small">Controllo locale: non modifica Firebase e non manda eventi ai partecipanti.</div></div><button class="modal-close" data-action="close-modal">✕</button></div><div class="notice"><b>${passed}/${total} controlli superati</b><br>Questo test verifica integrità e stato attuale. Non sostituisce una prova reale con più telefoni.</div>${rows.join('')}<div class="toolbar"><button class="primary" id="runSystemTestAgain" type="button">🔄 Ripeti test</button><button class="ghost" data-action="close-modal">Chiudi</button></div>`;
     if(typeof window.showModal==='function'){
-      window.showModal(`<div class="modal-head"><div><h2>🧪 Collaudo FANTABUCCIA</h2><div class="small">Controllo locale non modifica Firebase e non manda eventi ai partecipanti.</div></div><button class="modal-close" data-action="close-modal">✕</button></div><div class="notice"><b>${passed}/${total} controlli superati</b><br>Questo test verifica integrità e stato attuale. Non sostituisce una prova reale con più telefoni.</div>${rows.join('')}<div class="toolbar"><button class="primary" id="runSystemTestAgain" type="button">🔄 Ripeti test</button><button class="ghost" data-action="close-modal">Chiudi</button></div>`);
+      window.showModal(modalHtml);
+    }else{
+      // Fallback robusto nel caso in cui la funzione globale non sia ancora disponibile.
+      const host=document.getElementById('modalContent');
+      const shell=document.getElementById('modal');
+      if(host && shell){ host.innerHTML=modalHtml; shell.classList.remove('hidden'); }
+      else { alert(`🧪 TEST SISTEMA\n\n${passed}/${total} controlli superati.`); }
     }
   }
+  function bindTestButton(){
+    const btn=document.getElementById('testSystemButton');
+    if(!btn || btn.dataset.testBound==='1') return;
+    btn.dataset.testBound='1';
+    btn.addEventListener('click',function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      runTest();
+    },false);
+  }
+  bindTestButton();
+  setTimeout(bindTestButton,500);
+  setTimeout(bindTestButton,1500);
   document.addEventListener('click',e=>{
     if(e.target.closest('#testSystemButton')){e.preventDefault();e.stopPropagation();runTest();}
     if(e.target.closest('#runSystemTestAgain')){e.preventDefault();runTest();}
